@@ -115,6 +115,7 @@ from .utils.progress import get_progress_manager
 from .utils.http import safe_content_disposition as safe_content_disposition
 from .services.task_queue import create_background_task, init_queue
 from .routes import register_routers
+from .utils.api_keys import APIKeyMiddleware
 
 
 def create_app() -> FastAPI:
@@ -156,6 +157,9 @@ def create_app() -> FastAPI:
 
     _configure_cors(application)
     application.add_middleware(ClientIdMiddleware)
+    # Added last so it runs first: external (tunnelled) requests are limited
+    # to /tts/* with an API key before any other middleware or route sees them.
+    application.add_middleware(APIKeyMiddleware)
     register_routers(application)
     application.mount("/mcp", mcp_app)
     logger.info("MCP: mounted at /mcp")

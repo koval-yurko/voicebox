@@ -3,7 +3,10 @@
 
 Usage:
   backend/venv/bin/python scripts/tts_stream_test.py --profile <id> [--mode http|ws|both]
-      [--url http://127.0.0.1:17493] [--interval-ms 320] [--model-size 1.7B] [--out /tmp/tts]
+      [--url http://127.0.0.1:17493] [--api-key KEY] [--interval-ms 320] [--model-size 1.7B] [--out /tmp/tts]
+
+--url may be an https:// address (for example a Cloudflare Tunnel hostname);
+--api-key is sent as "Authorization: Bearer KEY" on both routes.
 
 Prints time to first audio, total time and audio length, and writes WAV files.
 """
@@ -30,15 +33,23 @@ def save_wav(path, pcm, rate):
         w.writeframes(pcm)
 
 
+def auth_headers(args):
+    return {"Authorization": f"Bearer {args.api_key}"} if args.api_key else {}
+
+
 def run_http(args):
     u = urlparse(args.url)
     body = json.dumps({
         "profile_id": args.profile, "text": args.text, "interval_ms": args.interval_ms,
         "model_size": args.model_size, "language": args.language,
     })
-    conn = http.client.HTTPConnection(u.hostname, u.port or 80, timeout=600)
+    if u.scheme == "https":
+        conn = http.client.HTTPSConnection(u.hostname, u.port or 443, timeout=600)
+    else:
+        conn = http.client.HTTPConnection(u.hostname, u.port or 80, timeout=600)
     t0 = time.perf_counter()
-    conn.request("POST", "/tts/stream", body=body, headers={"content-type": "application/json"})
+    conn.request("POST", "/tts/stream", body=body,
+                 headers={"content-type": "application/json", **auth_headers(args)})
     resp = conn.getresponse()
     if resp.status != 200:
         raise SystemExit(f"HTTP {resp.status}: {resp.read().decode()}")
@@ -64,7 +75,7 @@ async def run_ws(args):
     import websockets
 
     url = args.url.replace("http", "ws", 1) + "/tts/ws"
-    async with websockets.connect(url, max_size=None) as ws:
+    async with websockets.connect(url, max_size=None, additional_headers=auth_headers(args)) as ws:
         await ws.send(json.dumps({
             "type": "start", "profile_id": args.profile, "interval_ms": args.interval_ms,
             "model_size": args.model_size, "language": args.language,
@@ -106,6 +117,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--profile", required=True)
     p.add_argument("--url", default="http://127.0.0.1:17493")
+    p.add_argument("--api-key", default=None)
     p.add_argument("--mode", choices=["http", "ws", "both"], default="both")
     p.add_argument("--interval-ms", type=int, default=320)
     p.add_argument("--model-size", default="1.7B")
