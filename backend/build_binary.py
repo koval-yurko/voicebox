@@ -173,6 +173,12 @@ def build_server(cuda=False, rocm=False):
             "fastapi",
             "--hidden-import",
             "uvicorn",
+            # uvicorn picks its WebSocket protocol by import string at
+            # runtime; bundle it so /tts/ws works in the frozen server.
+            "--collect-submodules",
+            "uvicorn",
+            "--collect-submodules",
+            "websockets",
             "--hidden-import",
             "sqlalchemy",
             # librosa uses lazy_loader which generates .pyi stub files at

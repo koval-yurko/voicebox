@@ -2,9 +2,10 @@
 MLX backend implementation for TTS and STT using mlx-audio.
 """
 
-from typing import Optional, List, Tuple
+from typing import AsyncIterator, Optional, List, Tuple
 import asyncio
 import logging
+import threading
 import numpy as np
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -53,6 +54,7 @@ class MLXTTSBackend:
         # so a concurrent request for a different model_size can't swap self.model
         # out from under an in-flight request between its load and its inference.
         self._op_lock = asyncio.Lock()
+        self._ref_audio_cache: dict = {}
 
     def is_loaded(self) -> bool:
         """Check if model is loaded."""
@@ -341,6 +343,94 @@ class MLXTTSBackend:
             audio, sample_rate = await _run_on_mlx_thread(_reload_and_generate_sync)
 
         return audio, sample_rate
+
+    def _load_ref_audio_cached(self, ref_audio: str):
+        """Load reference audio once per (path, mtime) as an mx.array.
+
+        mlx-audio re-reads and resamples a path on every generate() call;
+        passing the cached array skips that work on the streaming path.
+        """
+        from mlx_audio.utils import load_audio
+
+        key = (ref_audio, Path(ref_audio).stat().st_mtime_ns, self._current_model_size)
+        cached = self._ref_audio_cache.get(key)
+        if cached is None:
+            cached = load_audio(ref_audio, sample_rate=self.model.sample_rate)
+            self._ref_audio_cache.clear()
+            self._ref_audio_cache[key] = cached
+        return cached
+
+    async def generate_stream(
+        self,
+        text: str,
+        voice_prompt: dict,
+        language: str = "en",
+        seed: Optional[int] = None,
+        instruct: Optional[str] = None,
+        interval_s: float = 0.32,
+    ) -> AsyncIterator[Tuple[np.ndarray, int]]:
+        """Yield audio chunks while the model decodes (mlx-audio stream=True).
+
+        The mlx-audio generator runs in a worker thread and hands each decoded
+        chunk to the event loop. Closing or cancelling this async generator
+        stops the worker at its next chunk.
+        """
+        await self.load_model_async(None)
+
+        loop = asyncio.get_running_loop()
+        chunks: asyncio.Queue = asyncio.Queue()
+        stop = threading.Event()
+        done = object()
+
+        def _put(item):
+            loop.call_soon_threadsafe(chunks.put_nowait, item)
+
+        def _stream_sync():
+            try:
+                lang = LANGUAGE_CODE_TO_NAME.get(language, "auto")
+                if seed is not None:
+                    import mlx.core as mx
+
+                    np.random.seed(seed)
+                    mx.random.seed(seed)
+
+                kwargs = {"lang_code": lang, "stream": True, "streaming_interval": interval_s}
+                ref_audio = voice_prompt.get("ref_audio") or voice_prompt.get("ref_audio_path")
+                if ref_audio and Path(ref_audio).exists():
+                    kwargs["ref_audio"] = self._load_ref_audio_cached(ref_audio)
+                    kwargs["ref_text"] = voice_prompt.get("ref_text", "")
+                elif ref_audio:
+                    logger.warning("Audio file not found: %s; streaming without voice prompt", ref_audio)
+
+                gen = self.model.generate(text, **kwargs)
+                try:
+                    for result in gen:
+                        if stop.is_set():
+                            break
+                        _put((np.asarray(result.audio, dtype=np.float32), result.sample_rate))
+                finally:
+                    gen.close()
+            except BaseException as e:  # forwarded to the async side
+                _put(e)
+            finally:
+                _put(done)
+
+        worker = loop.run_in_executor(None, _stream_sync)
+        try:
+            while True:
+                item = await chunks.get()
+                if item is done:
+                    break
+                if isinstance(item, BaseException):
+                    raise item
+                yield item
+        finally:
+            stop.set()
+            # Wait for the worker so the next generation never overlaps it on the GPU.
+            try:
+                await asyncio.wait_for(asyncio.shield(worker), timeout=30)
+            except BaseException:
+                pass
 
 
 class MLXSTTBackend:

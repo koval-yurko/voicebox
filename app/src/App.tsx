@@ -95,8 +95,8 @@ function MainApp() {
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const serverStartingRef = useRef(false);
 
-  // Automatically check for app updates on startup and show toast notifications
-  useAutoUpdater({ checkOnMount: true, showToast: true });
+  // Custom build: never auto-update, or the official release would replace it.
+  useAutoUpdater({ checkOnMount: false, showToast: false });
 
   // Replay the saved chord into the Rust hotkey listener every time
   // capture_settings resolves or the user edits the chord.

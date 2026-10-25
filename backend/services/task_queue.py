@@ -27,6 +27,10 @@ _queued_generation_ids: set[str] = set()
 _running_generation_tasks: dict[str, asyncio.Task] = {}
 _cancelled_generation_ids: set[str] = set()
 
+# Held during any TTS inference: the queue worker and the real-time
+# /tts/stream and /tts/ws routes share it so they never overlap on the GPU.
+inference_lock = asyncio.Lock()
+
 
 def create_background_task(coro) -> asyncio.Task:
     """Create a background task and prevent it from being garbage collected."""
@@ -41,19 +45,22 @@ async def _generation_worker():
     while True:
         job = await _generation_queue.get()
         try:
-            if job.generation_id in _cancelled_generation_ids:
-                _cancelled_generation_ids.discard(job.generation_id)
-                job.coro.close()
-                continue
+            # Wait for a running real-time stream before starting; the job
+            # stays "queued" (and cancellable) until the lock is free.
+            async with inference_lock:
+                if job.generation_id in _cancelled_generation_ids:
+                    _cancelled_generation_ids.discard(job.generation_id)
+                    job.coro.close()
+                    continue
 
-            task = asyncio.create_task(job.coro)
-            _running_generation_tasks[job.generation_id] = task
-            _queued_generation_ids.discard(job.generation_id)
-            try:
-                await task
-            except asyncio.CancelledError:
-                if not task.cancelled():
-                    raise
+                task = asyncio.create_task(job.coro)
+                _running_generation_tasks[job.generation_id] = task
+                _queued_generation_ids.discard(job.generation_id)
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    if not task.cancelled():
+                        raise
         except Exception:
             traceback.print_exc()
             await _force_fail_if_active(
