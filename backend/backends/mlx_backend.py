@@ -40,6 +40,7 @@ from .base import (  # noqa: E402
     model_load_progress,
     empty_mlx_cache,
 )
+from .mlx_icl_stream import encode_reference, stream_icl, supports_cached_icl  # noqa: E402
 from ..utils.cache import get_cache_key, get_cached_voice_prompt, cache_voice_prompt  # noqa: E402
 
 
@@ -344,18 +345,18 @@ class MLXTTSBackend:
 
         return audio, sample_rate
 
-    def _load_ref_audio_cached(self, ref_audio: str):
-        """Load reference audio once per (path, mtime) as an mx.array.
+    def _icl_reference_cached(self, ref_audio: str):
+        """Load and encode reference audio once per (path, mtime, model size).
 
-        mlx-audio re-reads and resamples a path on every generate() call;
-        passing the cached array skips that work on the streaming path.
+        mlx-audio re-reads, resamples and re-encodes the reference on every
+        generate() call; the cached IclReference skips that on the streaming path.
         """
         from mlx_audio.utils import load_audio
 
         key = (ref_audio, Path(ref_audio).stat().st_mtime_ns, self._current_model_size)
         cached = self._ref_audio_cache.get(key)
         if cached is None:
-            cached = load_audio(ref_audio, sample_rate=self.model.sample_rate)
+            cached = encode_reference(self.model, load_audio(ref_audio, sample_rate=self.model.sample_rate))
             self._ref_audio_cache.clear()
             self._ref_audio_cache[key] = cached
         return cached
@@ -396,18 +397,31 @@ class MLXTTSBackend:
 
                 kwargs = {"lang_code": lang, "stream": True, "streaming_interval": interval_s}
                 ref_audio = voice_prompt.get("ref_audio") or voice_prompt.get("ref_audio_path")
-                if ref_audio and Path(ref_audio).exists():
-                    kwargs["ref_audio"] = self._load_ref_audio_cached(ref_audio)
-                    kwargs["ref_text"] = voice_prompt.get("ref_text", "")
-                elif ref_audio:
+                if ref_audio and not Path(ref_audio).exists():
                     logger.warning("Audio file not found: %s; streaming without voice prompt", ref_audio)
+                    ref_audio = None
 
-                gen = self.model.generate(text, **kwargs)
+                if ref_audio and supports_cached_icl(self.model):
+                    gen = stream_icl(
+                        self.model,
+                        text,
+                        self._icl_reference_cached(ref_audio),
+                        voice_prompt.get("ref_text", ""),
+                        language=lang,
+                        chunk_tokens=max(1, int(interval_s * 12.5)),
+                    )
+                    results = ((audio, self.model.sample_rate) for audio in gen)
+                else:
+                    if ref_audio:
+                        kwargs["ref_audio"] = ref_audio
+                        kwargs["ref_text"] = voice_prompt.get("ref_text", "")
+                    gen = self.model.generate(text, **kwargs)
+                    results = ((result.audio, result.sample_rate) for result in gen)
                 try:
-                    for result in gen:
+                    for audio, sample_rate in results:
                         if stop.is_set():
                             break
-                        _put((np.asarray(result.audio, dtype=np.float32), result.sample_rate))
+                        _put((np.asarray(audio, dtype=np.float32), sample_rate))
                 finally:
                     gen.close()
             except BaseException as e:  # forwarded to the async side
