@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import config, models
-from ..backends import get_llm_model_configs, get_stt_model_configs
+from ..backends import get_llm_model_configs, resolve_stt_model
 from ..backends.base import is_model_cached
 from ..database import Capture as DBCapture, get_db
 from ..services import captures as captures_service
@@ -39,7 +39,10 @@ async def create_capture_endpoint(
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
     saved = settings_service.get_capture_settings(db)
-    resolved_stt = stt_model or saved.stt_model
+    try:
+        resolved_stt = resolve_stt_model(stt_model, default=saved.stt_model).model_name
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if language is None:
         resolved_language = None if saved.language == "auto" else saved.language
     else:
@@ -165,18 +168,18 @@ async def capture_readiness_endpoint(db: Session = Depends(get_db)):
     """
     saved = settings_service.get_capture_settings(db)
 
-    stt_cfg = next(
-        (c for c in get_stt_model_configs() if c.model_size == saved.stt_model),
-        None,
-    )
+    try:
+        stt_cfg = resolve_stt_model(saved.stt_model)
+    except ValueError:
+        stt_cfg = None
     llm_cfg = next(
         (c for c in get_llm_model_configs() if c.model_size == saved.llm_model),
         None,
     )
 
     if stt_cfg is None or llm_cfg is None:
-        # Should be impossible — both fields are pattern-validated against
-        # known sizes — but bail loudly rather than return half a response.
+        # Should be impossible — both fields are validated against known
+        # models — but bail loudly rather than return half a response.
         raise HTTPException(
             status_code=500,
             detail=f"No model config for stt={saved.stt_model} or llm={saved.llm_model}",
@@ -225,7 +228,10 @@ async def retranscribe_capture_endpoint(
     db: Session = Depends(get_db),
 ):
     saved = settings_service.get_capture_settings(db)
-    resolved_stt = request.model or saved.stt_model
+    try:
+        resolved_stt = resolve_stt_model(request.model, default=saved.stt_model).model_name
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if request.language is None:
         resolved_language = None if saved.language == "auto" else saved.language
     else:

@@ -5,10 +5,11 @@ This test suite verifies that the application correctly handles
 duplicate profile names and provides user-friendly error messages.
 """
 
-import pytest
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
+
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 

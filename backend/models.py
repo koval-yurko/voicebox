@@ -2,14 +2,28 @@
 Pydantic models for request/response validation.
 """
 
-from pydantic import BaseModel, Field, model_validator
-from typing import Any, Optional, List
+from pydantic import AfterValidator, BaseModel, Field, model_validator
+from typing import Annotated, Any, Optional, List
 from datetime import datetime
 
 from .utils.capture_chords import (
     default_push_to_talk_chord,
     default_toggle_to_talk_chord,
 )
+
+
+def _validate_stt_model(value: str) -> str:
+    """Accept a full STT model name or an old Whisper size; keep it as given."""
+    from .backends import is_valid_stt_model
+
+    if not is_valid_stt_model(value):
+        raise ValueError(f"Unknown STT model '{value}'")
+    return value
+
+
+# An STT model name (``whisper-turbo``, ``qwen-asr-0.6B``) or an old Whisper
+# size alias (``turbo``). Old rows in the database keep the alias form.
+STTModelName = Annotated[str, AfterValidator(_validate_stt_model)]
 
 
 class VoiceProfileCreate(BaseModel):
@@ -172,7 +186,7 @@ class TranscriptionRequest(BaseModel):
     """Request model for audio transcription."""
 
     language: Optional[str] = Field(None, pattern="^(en|zh|ja|ko|de|fr|ru|pt|es|it)$")
-    model: Optional[str] = Field(None, pattern="^(base|small|medium|large|turbo)$")
+    model: Optional[STTModelName] = None
 
 
 class TranscriptionResponse(BaseModel):
@@ -241,14 +255,15 @@ class CaptureRefineRequest(BaseModel):
 class CaptureRetranscribeRequest(BaseModel):
     """Request to re-run STT on a capture's audio with a different model."""
 
-    model: Optional[str] = Field(None, pattern="^(base|small|medium|large|turbo)$")
+    model: Optional[STTModelName] = None
     language: Optional[str] = Field(None, pattern="^(en|zh|ja|ko|de|fr|ru|pt|es|it)$")
 
 
 class CaptureSettingsResponse(BaseModel):
     """Server-persisted defaults for the capture / refine flow."""
 
-    stt_model: str = Field(default="turbo", pattern="^(base|small|medium|large|turbo)$")
+    # Stored value as is (may be an old Whisper size); the UI resolves aliases.
+    stt_model: str = Field(default="turbo")
     language: str = Field(default="auto")
     auto_refine: bool = True
     llm_model: str = Field(default="0.6B", pattern="^(0\\.6B|1\\.7B|4B)$")
@@ -304,7 +319,7 @@ class CaptureSettingsResponse(BaseModel):
 class CaptureSettingsUpdate(BaseModel):
     """Partial update for capture settings — every field is optional."""
 
-    stt_model: Optional[str] = Field(default=None, pattern="^(base|small|medium|large|turbo)$")
+    stt_model: Optional[STTModelName] = None
     language: Optional[str] = None
     auto_refine: Optional[bool] = None
     llm_model: Optional[str] = Field(default=None, pattern="^(0\\.6B|1\\.7B|4B)$")

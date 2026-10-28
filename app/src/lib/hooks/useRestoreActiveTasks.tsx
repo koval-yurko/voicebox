@@ -84,4 +84,7 @@ export const MODEL_DISPLAY_NAMES: Record<string, string> = {
   'whisper-small': 'Whisper Small',
   'whisper-medium': 'Whisper Medium',
   'whisper-large': 'Whisper Large',
+  'whisper-turbo': 'Whisper Turbo',
+  'qwen-asr-0.6B': 'Qwen3-ASR 0.6B',
+  'qwen-asr-1.7B': 'Qwen3-ASR 1.7B',
 };

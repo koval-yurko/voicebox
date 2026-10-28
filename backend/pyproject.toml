@@ -88,3 +88,6 @@ docstring-code-format = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "slow: downloads or runs real models (skipped unless VOICEBOX_RUN_SLOW=1)",
+]

@@ -30,7 +30,7 @@
     "noTranscriptError": "此擷取尚無轉錄文字",
     "captureCardLabel": "擷取 · {{when}}",
     "header": {
-      "modelSummary": "Whisper {{stt}} · Qwen3 · {{llm}}"
+      "modelSummary": "{{stt}} · Qwen3 · {{llm}}"
     },
     "source": {
       "dictation": "口述",
@@ -41,7 +41,7 @@
       "refined": "精修",
       "raw": "原始",
       "refinedHint": "由 Qwen3 · {{model}} 精修",
-      "rawHint": "由 Whisper {{model}} 轉錄"
+      "rawHint": "由 {{model}} 轉錄"
     },
     "actions": {
       "configure": "設定",
@@ -940,18 +940,22 @@
         "description": "選擇用於擷取的語音轉文字模型。",
         "model": {
           "title": "轉錄模型",
-          "description": "Whisper 隨 Voicebox 提供,完全在您的電腦上執行。",
+          "description": "Whisper 與 Qwen3-ASR 完全在您的電腦上執行。",
           "base": "Whisper Base · 74M · {{tail}}",
           "small": "Whisper Small · 244M · {{tail}}",
           "medium": "Whisper Medium · 769M · {{tail}}",
           "large": "Whisper Large · 1.5B · {{tail}}",
           "turbo": "Whisper Turbo · 精簡版 Large v3 · {{tail}}",
+          "qwenAsrSmall": "Qwen3-ASR 0.6B · 30 種語言 · {{tail}}",
+          "qwenAsrLarge": "Qwen3-ASR 1.7B · 30 種語言 · {{tail}}",
           "tail": {
             "fast": "快速",
             "balanced": "平衡",
             "higher": "較高準確度",
             "best": "最高準確度",
-            "nearBest": "接近最佳,快速"
+            "nearBest": "接近最佳,快速",
+            "englishFastest": "英語,最快",
+            "otherLanguages": "推薦用於其他語言"
           }
         },
         "language": {

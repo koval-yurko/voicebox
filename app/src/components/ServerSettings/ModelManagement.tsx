@@ -87,6 +87,10 @@ const MODEL_DESCRIPTIONS: Record<string, string> = {
     'Whisper Large (1.5B parameters). Best accuracy for speech-to-text across multiple languages.',
   'whisper-turbo':
     'Whisper Large v3 Turbo. Pruned for significantly faster inference while maintaining near-large accuracy.',
+  'qwen-asr-0.6B':
+    'Qwen3-ASR 0.6B by Alibaba (8-bit, 1.0 GB). The fastest STT model, recommended for English. Supports 30 languages. Runs on the Apple Silicon GPU through MLX.',
+  'qwen-asr-1.7B':
+    'Qwen3-ASR 1.7B by Alibaba (8-bit, 2.5 GB). Recommended for languages other than English: close to Whisper Turbo on German and Russian. Supports 30 languages. Runs on the Apple Silicon GPU through MLX.',
   'qwen3-0.6b':
     'Qwen3 0.6B — smallest of the Qwen3 instruct family. Very fast on CPU, runs at ~400 MB quantized on Apple Silicon. Good for dictation refinement and short completions.',
   'qwen3-1.7b':
@@ -422,13 +426,16 @@ export function ModelManagement() {
         m.model_name.startsWith('kokoro') ||
         m.model_name.startsWith('omnivoice'),
     ) ?? [];
-  const whisperModels = modelStatus?.models.filter((m) => m.model_name.startsWith('whisper')) ?? [];
+  const sttModels =
+    modelStatus?.models.filter(
+      (m) => m.model_name.startsWith('whisper') || m.model_name.startsWith('qwen-asr'),
+    ) ?? [];
   const llmModels = modelStatus?.models.filter((m) => m.model_name.startsWith('qwen3-')) ?? [];
 
   // Build sections
   const sections: { label: string; models: ModelStatus[] }[] = [
     { label: t('models.sections.voiceGeneration'), models: voiceModels },
-    { label: t('models.sections.transcription'), models: whisperModels },
+    { label: t('models.sections.transcription'), models: sttModels },
     { label: t('models.sections.languageModels'), models: llmModels },
   ];
 

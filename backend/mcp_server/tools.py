@@ -116,9 +116,13 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool(
         name="voicebox_transcribe",
         description=(
-            "Transcribe an audio clip to text using Voicebox's local Whisper. "
+            "Transcribe an audio clip to text using Voicebox's local STT. "
             "Pass exactly one of `audio_base64` (bytes as base64) or "
-            "`audio_path` (absolute local file path — loopback callers only)."
+            "`audio_path` (absolute local file path — loopback callers only). "
+            "Optional `model`: `whisper-base`, `whisper-small`, "
+            "`whisper-medium`, `whisper-large`, `whisper-turbo`, "
+            "`qwen-asr-0.6B` or `qwen-asr-1.7B` (old Whisper sizes such as "
+            "`turbo` also work). Empty uses the capture settings default."
         ),
     )
     async def voicebox_transcribe(
@@ -298,34 +302,32 @@ def _speak_response(
 async def _transcribe_file(
     path: Path, language: str | None, model: str | None
 ) -> dict[str, Any]:
-    from ..backends import WHISPER_HF_REPOS
-    from ..services import transcribe as transcribe_service
+    from ..services import settings as settings_service, transcribe as transcribe_service
     from ..utils.audio import load_audio
 
-    whisper = transcribe_service.get_whisper_model()
-    model_size = model or whisper.model_size
-    valid = list(WHISPER_HF_REPOS.keys())
-    if model_size not in valid:
-        raise ValueError(
-            f"Invalid STT model '{model_size}'. Must be one of: {', '.join(valid)}"
-        )
+    db = next(get_db())
+    try:
+        default_model = settings_service.get_capture_settings(db).stt_model
+    finally:
+        db.close()
+
+    # Raises ValueError for an unknown model name.
+    stt, config = transcribe_service.get_stt_for_model(model, default=default_model)
 
     # load_audio is sync; keep the event loop responsive.
     audio, sr = await asyncio.to_thread(load_audio, str(path))
     duration = len(audio) / sr
 
-    if (
-        not whisper.is_loaded() or whisper.model_size != model_size
-    ) and not whisper._is_model_cached(model_size):
+    if not transcribe_service.is_stt_model_ready(stt, config):
         raise ValueError(
-            f"Whisper model '{model_size}' is not yet downloaded. Open "
+            f"STT model '{config.model_name}' is not yet downloaded. Open "
             "Voicebox → Settings → Models to download it first."
         )
 
-    text = await whisper.transcribe(str(path), language, model_size)
+    text = await transcribe_service.transcribe_with_model(config, str(path), language)
     return {
         "text": text,
         "duration": duration,
         "language": language,
-        "model": model_size,
+        "model": config.model_name,
     }

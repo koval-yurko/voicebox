@@ -22,7 +22,7 @@ from ..database import Capture as DBCapture
 from ..models import CaptureResponse, RefinementFlagsModel
 from ..utils.audio import load_audio
 from .refinement import RefinementFlags, refine_transcript
-from .transcribe import get_whisper_model
+from .transcribe import get_stt_for_model, transcribe_with_model
 
 logger = logging.getLogger(__name__)
 
@@ -117,9 +117,8 @@ async def create_capture(
                 raw_path.unlink()
                 written_files.remove(raw_path)
 
-        whisper = get_whisper_model()
-        resolved_stt = stt_model or whisper.model_size
-        transcript = await whisper.transcribe(str(audio_path), language, resolved_stt)
+        _, stt_config = get_stt_for_model(stt_model)
+        transcript = await transcribe_with_model(stt_config, str(audio_path), language)
 
         row = DBCapture(
             id=capture_id,
@@ -128,7 +127,7 @@ async def create_capture(
             language=language,
             duration_ms=duration_ms,
             transcript_raw=transcript,
-            stt_model=resolved_stt,
+            stt_model=stt_config.model_name,
         )
         db.add(row)
         db.commit()
@@ -219,12 +218,11 @@ async def retranscribe_capture(
     if not resolved or not resolved.exists():
         raise FileNotFoundError(f"Audio for capture {capture_id} is missing")
 
-    whisper = get_whisper_model()
-    resolved_stt = stt_model or whisper.model_size
-    transcript = await whisper.transcribe(str(resolved), language, resolved_stt)
+    _, stt_config = get_stt_for_model(stt_model)
+    transcript = await transcribe_with_model(stt_config, str(resolved), language)
 
     row.transcript_raw = transcript
-    row.stt_model = resolved_stt
+    row.stt_model = stt_config.model_name
     if language:
         row.language = language
     # Refined text is stale after a fresh STT pass — force a re-refine.

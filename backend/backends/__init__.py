@@ -210,7 +210,8 @@ class LLMBackend(Protocol):
 _tts_backend: Optional[TTSBackend] = None
 _tts_backends: dict[str, TTSBackend] = {}
 _tts_backends_lock = threading.Lock()
-_stt_backend: Optional[STTBackend] = None
+_stt_backends: dict[str, STTBackend] = {}
+_stt_backends_lock = threading.Lock()
 _llm_backends: dict[str, LLMBackend] = {}
 _llm_backends_lock = threading.Lock()
 
@@ -240,6 +241,14 @@ TTS_ENGINES = {
     "kokoro": "Kokoro",
     "omnivoice": "OmniVoice",
 }
+
+STT_ENGINES = {
+    "whisper": "Whisper",
+    "qwen_asr": "Qwen3-ASR",
+}
+
+# Default STT model when neither the request nor the capture settings name one.
+DEFAULT_STT_MODEL = "whisper-turbo"
 
 LLM_ENGINES = {
     "qwen_llm": "Qwen3 LLM",
@@ -514,6 +523,32 @@ def _get_whisper_configs() -> list[ModelConfig]:
     ]
 
 
+def _get_qwen_asr_configs() -> list[ModelConfig]:
+    """Return Qwen3-ASR STT model configs (MLX only, via mlx-audio)."""
+    from .qwen_asr_backend import QWEN_ASR_HF_REPOS, QWEN_ASR_LANGUAGE_CODES
+
+    return [
+        ModelConfig(
+            model_name="qwen-asr-0.6B",
+            display_name="Qwen3-ASR 0.6B",
+            engine="qwen_asr",
+            hf_repo_id=QWEN_ASR_HF_REPOS["0.6B"],
+            model_size="0.6B",
+            size_mb=1010,
+            languages=QWEN_ASR_LANGUAGE_CODES,
+        ),
+        ModelConfig(
+            model_name="qwen-asr-1.7B",
+            display_name="Qwen3-ASR 1.7B",
+            engine="qwen_asr",
+            hf_repo_id=QWEN_ASR_HF_REPOS["1.7B"],
+            model_size="1.7B",
+            size_mb=2470,
+            languages=QWEN_ASR_LANGUAGE_CODES,
+        ),
+    ]
+
+
 def _get_qwen_llm_configs() -> list[ModelConfig]:
     """Return Qwen3 LLM configs with backend-aware HF repo IDs.
 
@@ -572,7 +607,7 @@ def get_all_model_configs() -> list[ModelConfig]:
         + _get_qwen_custom_voice_configs()
         + _get_qwen_voice_design_configs()
         + _get_non_qwen_tts_configs()
-        + _get_whisper_configs()
+        + get_stt_model_configs()
         + _get_qwen_llm_configs()
     )
 
@@ -593,8 +628,46 @@ def get_llm_model_configs() -> list[ModelConfig]:
 
 
 def get_stt_model_configs() -> list[ModelConfig]:
-    """Return only STT (Whisper) model configs."""
-    return _get_whisper_configs()
+    """Return only STT model configs (all engines)."""
+    configs = _get_whisper_configs()
+    # Qwen3-ASR runs through mlx-audio, so it exists only on the MLX backend.
+    if get_backend_type() == "mlx":
+        configs += _get_qwen_asr_configs()
+    return configs
+
+
+def resolve_stt_model(name: str | None, default: str | None = None) -> ModelConfig:
+    """Resolve an STT model name to its config.
+
+    Accepts a full model name (``whisper-turbo``, ``qwen-asr-0.6B``) or an old
+    Whisper size alias (``turbo``, ``base``, ...). ``None`` resolves ``default``
+    (normally the capture settings value), then ``DEFAULT_STT_MODEL``.
+
+    Raises:
+        ValueError: the name matches no STT model.
+    """
+    if not name:
+        name = default or DEFAULT_STT_MODEL
+
+    configs = get_stt_model_configs()
+    for cfg in configs:
+        if cfg.model_name == name:
+            return cfg
+    for cfg in configs:
+        if cfg.engine == "whisper" and cfg.model_size == name:
+            return cfg
+
+    valid = [c.model_name for c in configs]
+    raise ValueError(f"Unknown STT model '{name}'. Must be one of: {', '.join(valid)}")
+
+
+def is_valid_stt_model(name: str) -> bool:
+    """Whether ``name`` is a known STT model name or Whisper size alias."""
+    try:
+        resolve_stt_model(name)
+    except ValueError:
+        return False
+    return True
 
 
 # Lookup helpers — these replace the if/elif chains in main.py
@@ -673,10 +746,10 @@ def unload_model_by_config(config: ModelConfig) -> bool:
     from ..services import tts, transcribe
     from ..utils.cache import clear_voice_prompt_memory_cache
 
-    if config.engine == "whisper":
-        whisper_model = transcribe.get_whisper_model()
-        if whisper_model.is_loaded() and whisper_model.model_size == config.model_size:
-            transcribe.unload_whisper_model()
+    if config.engine in STT_ENGINES:
+        stt_backend = get_stt_backend(config.engine)
+        if stt_backend.is_loaded() and stt_backend.model_size == config.model_size:
+            stt_backend.unload_model()
             return True
         return False
 
@@ -724,9 +797,9 @@ def check_model_loaded(config: ModelConfig) -> bool:
     from ..services import tts, transcribe
 
     try:
-        if config.engine == "whisper":
-            whisper_model = transcribe.get_whisper_model()
-            return whisper_model.is_loaded() and getattr(whisper_model, "model_size", None) == config.model_size
+        if config.engine in STT_ENGINES:
+            stt_backend = get_stt_backend(config.engine)
+            return stt_backend.is_loaded() and getattr(stt_backend, "model_size", None) == config.model_size
 
         if config.engine == "qwen_llm":
             backend = get_llm_backend_for_engine("qwen_llm")
@@ -754,8 +827,8 @@ def get_model_load_func(config: ModelConfig):
     from . import get_tts_backend_for_engine
     from ..services import tts, transcribe
 
-    if config.engine == "whisper":
-        return lambda: transcribe.get_whisper_model().load_model(config.model_size)
+    if config.engine in STT_ENGINES:
+        return lambda: transcribe.load_stt_model(config)
 
     if config.engine == "qwen":
         return lambda: tts.get_tts_model().load_model(config.model_size)
@@ -857,28 +930,55 @@ def get_tts_backend_for_engine(engine: str) -> TTSBackend:
         return backend
 
 
-def get_stt_backend() -> STTBackend:
+def get_stt_backend(engine: str = "whisper") -> STTBackend:
     """
-    Get or create STT backend instance based on platform.
+    Get or create the STT backend for an engine (1 instance per engine).
+
+    Args:
+        engine: STT engine name (see ``STT_ENGINES``). Defaults to Whisper.
 
     Returns:
-        STT backend instance (MLX or PyTorch)
+        STT backend instance
     """
-    global _stt_backend
+    if engine in _stt_backends:
+        return _stt_backends[engine]
 
-    if _stt_backend is None:
-        backend_type = get_backend_type()
+    with _stt_backends_lock:
+        if engine in _stt_backends:
+            return _stt_backends[engine]
 
-        if backend_type == "mlx":
-            from .mlx_backend import MLXSTTBackend
+        if engine == "whisper":
+            if get_backend_type() == "mlx":
+                from .mlx_backend import MLXSTTBackend
 
-            _stt_backend = MLXSTTBackend()
+                backend = MLXSTTBackend()
+            else:
+                from .pytorch_backend import PyTorchSTTBackend
+
+                backend = PyTorchSTTBackend()
+        elif engine == "qwen_asr":
+            from .qwen_asr_backend import MLXQwenASRBackend
+
+            backend = MLXQwenASRBackend()
         else:
-            from .pytorch_backend import PyTorchSTTBackend
+            raise ValueError(f"Unknown STT engine: {engine}. Supported: {list(STT_ENGINES.keys())}")
 
-            _stt_backend = PyTorchSTTBackend()
+        _stt_backends[engine] = backend
+        return backend
 
-    return _stt_backend
+
+def unload_other_stt_engines(keep: str) -> None:
+    """Unload every STT engine except ``keep``, so 1 STT model stays in memory."""
+    for engine, backend in list(_stt_backends.items()):
+        if engine != keep and backend.is_loaded():
+            backend.unload_model()
+
+
+def unload_all_stt_engines() -> None:
+    """Unload the models of all created STT backends."""
+    for backend in list(_stt_backends.values()):
+        if backend.is_loaded():
+            backend.unload_model()
 
 
 def set_llm_config(
@@ -986,11 +1086,11 @@ def get_llm_backend_for_engine(engine: str) -> LLMBackend:
 
 def reset_backends():
     """Reset backend instances (useful for testing)."""
-    global _tts_backend, _tts_backends, _stt_backend, _llm_backends
+    global _tts_backend, _tts_backends, _stt_backends, _llm_backends
     global _custom_llm_endpoint, _custom_llm_model, _custom_llm_api_key
     _tts_backend = None
     _tts_backends.clear()
-    _stt_backend = None
+    _stt_backends.clear()
     _llm_backends.clear()
     _custom_llm_endpoint = None
     _custom_llm_model = None

@@ -30,7 +30,7 @@
     "noTranscriptError": "このキャプチャにはまだ文字起こしがありません",
     "captureCardLabel": "キャプチャ · {{when}}",
     "header": {
-      "modelSummary": "Whisper {{stt}} · Qwen3 · {{llm}}"
+      "modelSummary": "{{stt}} · Qwen3 · {{llm}}"
     },
     "source": {
       "dictation": "ディクテーション",
@@ -41,7 +41,7 @@
       "refined": "整形済み",
       "raw": "生テキスト",
       "refinedHint": "Qwen3 · {{model}} で整形",
-      "rawHint": "Whisper {{model}} で文字起こし"
+      "rawHint": "{{model}} で文字起こし"
     },
     "actions": {
       "configure": "設定",
@@ -940,18 +940,22 @@
         "description": "キャプチャに使う音声認識モデルを選びます。",
         "model": {
           "title": "文字起こしモデル",
-          "description": "Whisper は Voicebox に同梱されており、すべてマシン上で動作します。",
+          "description": "Whisper と Qwen3-ASR はすべてマシン上で動作します。",
           "base": "Whisper Base · 74M · {{tail}}",
           "small": "Whisper Small · 244M · {{tail}}",
           "medium": "Whisper Medium · 769M · {{tail}}",
           "large": "Whisper Large · 1.5B · {{tail}}",
           "turbo": "Whisper Turbo · Pruned Large v3 · {{tail}}",
+          "qwenAsrSmall": "Qwen3-ASR 0.6B · 30 言語 · {{tail}}",
+          "qwenAsrLarge": "Qwen3-ASR 1.7B · 30 言語 · {{tail}}",
           "tail": {
             "fast": "高速",
             "balanced": "バランス",
             "higher": "高精度",
             "best": "最高精度",
-            "nearBest": "ほぼ最高精度かつ高速"
+            "nearBest": "ほぼ最高精度かつ高速",
+            "englishFastest": "英語向け・最速",
+            "otherLanguages": "英語以外の言語におすすめ"
           }
         },
         "language": {

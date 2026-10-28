@@ -78,7 +78,7 @@ def test_unload_model_by_config_leaves_cache_alone_for_whisper(monkeypatch):
     fake_whisper = MagicMock()
     fake_whisper.is_loaded.return_value = True
     fake_whisper.model_size = "base"
-    monkeypatch.setattr("backend.services.transcribe.get_whisper_model", lambda: fake_whisper)
+    monkeypatch.setattr(backends_module, "get_stt_backend", lambda engine: fake_whisper)
     _populate_memory_cache()
     cache_before = dict(cache_module._memory_cache)
 

@@ -4,9 +4,12 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 
 from .. import models
+from ..database import get_db
+from ..services import settings as settings_service
 from ..services import transcribe
 from ..services.task_queue import create_background_task
 from ..utils.tasks import get_task_manager
@@ -25,8 +28,13 @@ async def transcribe_audio(
     file: UploadFile = File(...),
     language: str | None = Form(None),
     model: str | None = Form(None),
+    db: Session = Depends(get_db),
 ):
-    """Transcribe audio file to text."""
+    """Transcribe audio file to text.
+
+    ``model`` is an STT model name (``whisper-turbo``, ``qwen-asr-0.6B``) or an
+    old Whisper size (``turbo``). Empty uses the capture settings default.
+    """
     uploaded_ext = Path(file.filename or "").suffix.lower()
     file_suffix = uploaded_ext if uploaded_ext in ALLOWED_AUDIO_EXTS else ".wav"
 
@@ -38,7 +46,12 @@ async def transcribe_audio(
     stt_path = tmp_path
     try:
         from ..utils.audio import load_audio, save_audio
-        from ..backends import WHISPER_HF_REPOS
+
+        saved = settings_service.get_capture_settings(db)
+        try:
+            stt_model, config = transcribe.get_stt_for_model(model, default=saved.stt_model)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
         audio, sr = await asyncio.to_thread(load_audio, tmp_path)
         duration = len(audio) / sr
@@ -48,47 +61,36 @@ async def transcribe_audio(
         # fail with "unsupported file format" (issue: web-mode dictation).
         # librosa already decoded the file above (it falls back to
         # audioread/ffmpeg for exotic containers), so re-encode that PCM to a
-        # temp WAV and hand *that* to Whisper. WAV inputs pass through
+        # temp WAV and hand *that* to the STT engine. WAV inputs pass through
         # unchanged.
         if file_suffix != ".wav":
             stt_path = f"{tmp_path}.stt.wav"
             await asyncio.to_thread(save_audio, audio, stt_path, sr)
 
-        whisper_model = transcribe.get_whisper_model()
-        model_size = model if model else whisper_model.model_size
-
-        valid_sizes = list(WHISPER_HF_REPOS.keys())
-        if model_size not in valid_sizes:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid model size '{model_size}'. Must be one of: {', '.join(valid_sizes)}",
-            )
-
-        already_loaded = whisper_model.is_loaded() and whisper_model.model_size == model_size
-        if not already_loaded and not whisper_model._is_model_cached(model_size):
-            progress_model_name = f"whisper-{model_size}"
+        if not transcribe.is_stt_model_ready(stt_model, config):
+            progress_model_name = config.model_name
             task_manager = get_task_manager()
 
-            async def download_whisper_background():
+            async def download_stt_background():
                 try:
-                    await whisper_model.load_model_async(model_size)
+                    await transcribe.load_stt_model(config)
                     task_manager.complete_download(progress_model_name)
                 except Exception as e:
                     task_manager.error_download(progress_model_name, str(e))
 
             task_manager.start_download(progress_model_name)
-            create_background_task(download_whisper_background())
+            create_background_task(download_stt_background())
 
             raise HTTPException(
                 status_code=202,
                 detail={
-                    "message": f"Whisper model {model_size} is being downloaded. Please wait and try again.",
+                    "message": f"{config.display_name} model is being downloaded. Please wait and try again.",
                     "model_name": progress_model_name,
                     "downloading": True,
                 },
             )
 
-        text = await whisper_model.transcribe(stt_path, language, model_size)
+        text = await transcribe.transcribe_with_model(config, stt_path, language)
 
         return models.TranscriptionResponse(
             text=text,

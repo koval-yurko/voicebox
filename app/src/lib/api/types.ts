@@ -140,6 +140,13 @@ export interface HistoryListResponse {
 
 export type WhisperModelSize = 'base' | 'small' | 'medium' | 'large' | 'turbo';
 
+/** Full STT model name. Old Whisper sizes are still accepted as aliases. */
+export type STTModelName =
+  | WhisperModelSize
+  | `whisper-${WhisperModelSize}`
+  | 'qwen-asr-0.6B'
+  | 'qwen-asr-1.7B';
+
 export type Qwen3ModelSize = '0.6B' | '1.7B' | '4B';
 
 export type CaptureSource = 'dictation' | 'recording' | 'file';
@@ -198,12 +205,12 @@ export interface CaptureRefineRequest {
 }
 
 export interface CaptureRetranscribeRequest {
-  model?: WhisperModelSize;
+  model?: STTModelName;
   language?: LanguageCode;
 }
 
 export interface CaptureSettings {
-  stt_model: WhisperModelSize;
+  stt_model: STTModelName;
   language: string;
   auto_refine: boolean;
   llm_model: Qwen3ModelSize;
@@ -275,7 +282,7 @@ export type GenerationSettingsUpdate = Partial<GenerationSettings>;
 
 export interface TranscriptionRequest {
   language?: LanguageCode;
-  model?: WhisperModelSize;
+  model?: STTModelName;
 }
 
 export interface TranscriptionResponse {

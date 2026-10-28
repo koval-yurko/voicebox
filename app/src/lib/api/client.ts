@@ -38,7 +38,7 @@ import type {
   TranscriptionResponse,
   VoiceProfileCreate,
   VoiceProfileResponse,
-  WhisperModelSize,
+  STTModelName,
   CaptureListResponse,
   CaptureResponse,
   CaptureCreateResponse,
@@ -403,7 +403,7 @@ class ApiClient {
   async transcribeAudio(
     file: File,
     language?: LanguageCode,
-    model?: WhisperModelSize,
+    model?: STTModelName,
   ): Promise<TranscriptionResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -446,7 +446,7 @@ class ApiClient {
     options?: {
       source?: CaptureSource;
       language?: LanguageCode;
-      sttModel?: WhisperModelSize;
+      sttModel?: STTModelName;
     },
   ): Promise<CaptureCreateResponse> {
     const formData = new FormData();
