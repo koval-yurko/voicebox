@@ -226,6 +226,14 @@ Capabilities: `interim_results=True`, `revises_text=False`, `native_streaming=Tr
 
 Cost: 1 step of a 4B decoder every 80 ms, also during silence (or pause it while the VAD reports silence). This keeps the GPU busy all the time and competes with TTS. It needs about 2.5 GB (4-bit) to 8 GB (bf16) of memory. Use it only if the Qwen3-ASR adapter is too slow or too unstable.
 
+Implemented in phase 5 (`NativeStreamingStream` in `backend/backends/stt_streaming.py`, `VoxtralNativeStream` in `backend/backends/voxtral_streaming.py`; results in `stt-implementation-plan.md`). Changes to the plan above:
+
+- Default delay 240 ms, not 480 ms. At 480 ms the model emits a word about 0.7 s after the word end, also in batch mode, so the text latency was 0.8 s. The client can set `delay_ms` per stream.
+- `end_segment()` pushes (delay + 1) tokens of silence. The model emits no EOS, and more silence gives no more text.
+- The state after the 32 left-pad silence tokens is the same for every segment. It is computed once and copied at each segment start.
+- Each interim step runs at most 4 decoder steps. Before FINAL, the session calls `catch_up()` in a loop, 1 lock hold per call. So audio that waited during a TTS request does not block the next TTS request.
+- The VAD gives the adapter the audio of open segments only, so no step runs in the silence between segments.
+
 ### 5.5 Whisper
 
 - Default: `SegmentedBatchStream` (FINAL only). This is enough for LiveKit with VAD.
@@ -256,6 +264,7 @@ Same style as `WS /tts/ws` (`backend/routes/tts_stream.py:297`).
 Client → server:
 
 - `{"type": "start", "model": "qwen-asr-0.6B", "language": "en", "sample_rate": 16000, "vad": true, "interim": true}`
+  - optional `"delay_ms"`: Voxtral Realtime transcription delay (multiple of 80 from 80 to 1200, or 2400; default 240). Other models ignore it.
 - binary frames: PCM16 little-endian mono at `sample_rate`
 - `{"type": "end_segment"}` — client endpoint (when `vad: false`)
 - `{"type": "cancel_segment"}`

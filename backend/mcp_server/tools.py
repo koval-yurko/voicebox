@@ -121,7 +121,7 @@ def register_tools(mcp: FastMCP) -> None:
             "`audio_path` (absolute local file path — loopback callers only). "
             "Optional `model`: `whisper-base`, `whisper-small`, "
             "`whisper-medium`, `whisper-large`, `whisper-turbo`, "
-            "`qwen-asr-0.6B` or `qwen-asr-1.7B` (old Whisper sizes such as "
+            "`qwen-asr-0.6B`, `qwen-asr-1.7B` or `voxtral-realtime-4B` (old Whisper sizes such as "
             "`turbo` also work). Empty uses the capture settings default."
         ),
     )

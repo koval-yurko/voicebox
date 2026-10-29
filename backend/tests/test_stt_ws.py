@@ -134,6 +134,8 @@ def test_cancel_segment_gives_no_final(client, fakes):
         ({"type": "start", "model": "bogus"}, "Unknown STT model 'bogus'"),
         ({"type": "start", "sample_rate": 1000}, "invalid start message"),
         ({"type": "start", "language": "../x"}, "invalid start message"),
+        ({"type": "start", "delay_ms": 100}, "invalid start message"),
+        ({"type": "start", "delay_ms": 1280}, "invalid start message"),
         ({"type": "end_segment"}, "send a start message first"),
         ({"type": "nope"}, "send a start message first"),
     ],
@@ -206,3 +208,20 @@ def test_client_disconnect_drops_open_segment(client, fakes):
     with client.websocket_connect("/stt/ws") as ws:
         _start(ws)
     assert whisper.calls == []
+
+
+def test_start_passes_delay_ms_to_the_stream(client, monkeypatch):
+    seen = []
+    open_stream = stt_stream.open_stt_stream
+
+    def recording_open(options, **kwargs):
+        seen.append(options.delay_ms)
+        return open_stream(options, **kwargs)
+
+    monkeypatch.setattr(stt_stream, "open_stt_stream", recording_open)
+    for delay_ms in (480, 2400, None):
+        with client.websocket_connect("/stt/ws") as ws:
+            assert _start(ws, delay_ms=delay_ms)["type"] == "ready"
+            ws.send_text(json.dumps({"type": "end"}))
+            assert _recv(ws) == {"type": "end"}
+    assert seen == [480, 2400, None]

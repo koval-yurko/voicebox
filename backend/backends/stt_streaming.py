@@ -8,6 +8,7 @@ Layers::
     client frames ──► StreamSession ──► VADSegmenter ──► model adapter ──► STTEvents
                       PCM16 → float32   Silero VAD        SegmentedBatchStream (any batch model)
                       resample 16 kHz   endpointing       RollingRedecodeStream (re-decode, interim text)
+                                                          NativeStreamingStream (streaming model, append-only text)
 
 ``StreamSession`` implements ``STTStream``. It owns the event queue, the
 segment buffer and 1 worker task that runs the model steps in order. Each
@@ -96,6 +97,7 @@ class STTStreamOptions:
     max_segment_s: float = 30.0  # force FINAL after this length
     vad: bool = True  # server VAD closes segments; False = the client calls end_segment()
     interim: bool = True  # emit INTERIM when the adapter can
+    delay_ms: int | None = None  # native streaming models: transcription delay; None = adapter default
 
 
 class STTStream(Protocol):
@@ -137,6 +139,9 @@ class SegmentAdapter:
     """
 
     capabilities: STTStreamCapabilities
+    # Fixed interim tick for adapters that step on the new audio only (native
+    # streaming). None = ``STTStreamOptions.interim_interval_ms``.
+    interim_interval_ms: int | None = None
 
     async def prepare(self) -> None:
         """Load the model before the first step."""
@@ -144,6 +149,14 @@ class SegmentAdapter:
     async def interim(self, audio: np.ndarray, segment_id: int) -> tuple[str, str] | None:
         """Return ``(text, stable_text)`` for the open segment, or None."""
         return None
+
+    async def catch_up(self, audio: np.ndarray, segment_id: int) -> bool:
+        """Before ``finalize()``: 1 short step on audio the model has not processed yet.
+
+        Returns True while work remains. The session calls it in a loop, with
+        the lock held for 1 call only, so a long backlog does not block TTS.
+        """
+        return False
 
     async def finalize(self, audio: np.ndarray, segment_id: int) -> str:
         """Return the final text of a closed segment."""
@@ -388,6 +401,137 @@ class RollingRedecodeStream(SegmentAdapter):
             self._committed = words[:agreed]
         self._previous = words
         return " ".join(words), " ".join(self._committed)
+
+
+NATIVE_CAPABILITIES = STTStreamCapabilities(
+    interim_results=True,
+    revises_text=False,
+    native_streaming=True,
+    min_latency_ms=500,
+    needs_vad=False,
+)
+
+
+class NativeStreamingStream(SegmentAdapter):
+    """Base class for models built for streaming (causal encoder, append-only text).
+
+    Design doc section 5.4. Each interim step gives ``feed()`` only the audio
+    that arrived since the last step; the model keeps its encoder and decoder
+    state between steps. ``finalize()`` feeds the rest of the segment, then
+    ``flush()`` pushes silence to get the last words. The text never changes,
+    so ``stable_text`` equals ``text``.
+
+    The session gives the adapter the audio of open segments only, so no model
+    step runs while the VAD reports silence between segments.
+
+    The model hooks are blocking. They run on the model's worker thread, 1 at
+    a time, so a subclass needs no locks for its segment state.
+    """
+
+    interim_interval_ms = 80  # 1 audio token of Voxtral Realtime
+
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+        self.capabilities = NATIVE_CAPABILITIES
+        self.step_times_ms: list[float] = []  # interim step times of the current segment
+        self._segment_id: int | None = None
+        self._consumed = 0  # segment samples given to feed()
+        self._text = ""  # text of the last INTERIM
+
+    # -- model hooks (blocking, on the worker thread) --
+
+    def begin_segment(self) -> None:
+        """Set up the per-segment model state."""
+
+    def feed(self, audio: np.ndarray) -> str:
+        """Process the new 16 kHz audio of the segment. Returns the segment text so far."""
+        raise NotImplementedError
+
+    def flush(self) -> str:
+        """End of the segment: process the held-back audio and return the final text."""
+        raise NotImplementedError
+
+    def has_backlog(self) -> bool:
+        """Whether fed audio waits for model steps (``feed()`` can limit its work)."""
+        return False
+
+    def free_segment(self) -> None:
+        """Free the per-segment model state."""
+
+    # -- SegmentAdapter --
+
+    async def interim(self, audio: np.ndarray, segment_id: int) -> tuple[str, str] | None:
+        return await run_blocking(self.model_name, self._interim_step, audio, segment_id)
+
+    async def catch_up(self, audio: np.ndarray, segment_id: int) -> bool:
+        return await run_blocking(self.model_name, self._catch_up_step, audio, segment_id)
+
+    async def finalize(self, audio: np.ndarray, segment_id: int) -> str:
+        return await run_blocking(self.model_name, self._final_step, audio, segment_id)
+
+    def reset(self, segment_id: int) -> None:
+        # A step of this segment can still run on the worker thread (cancel
+        # during a step), so the state is cleared there, after that step.
+        get_model_executor(self.model_name).submit(self._clear, segment_id)
+
+    # -- steps --
+
+    def _catch_up_step(self, audio: np.ndarray, segment_id: int) -> bool:
+        self._feed_new(audio, segment_id)
+        return self.has_backlog()
+
+    def _feed_new(self, audio: np.ndarray, segment_id: int) -> str:
+        if segment_id != self._segment_id:
+            self._clear(self._segment_id)
+            self._segment_id = segment_id
+            self.begin_segment()
+        new = audio[self._consumed :]
+        self._consumed = len(audio)
+        return self.feed(new)
+
+    def _interim_step(self, audio: np.ndarray, segment_id: int) -> tuple[str, str] | None:
+        import time
+
+        started = time.perf_counter()
+        text = self._feed_new(audio, segment_id)
+        self.step_times_ms.append((time.perf_counter() - started) * 1000)
+        if text == self._text:
+            return None
+        self._text = text
+        return text, text
+
+    def _final_step(self, audio: np.ndarray, segment_id: int) -> str:
+        import time
+
+        self._feed_new(audio, segment_id)
+        started = time.perf_counter()
+        text = self.flush()
+        logger.info(
+            "STT native %s segment %d: flush %.0f ms",
+            self.model_name,
+            segment_id,
+            (time.perf_counter() - started) * 1000,
+        )
+        return text
+
+    def _clear(self, segment_id: int | None) -> None:
+        if segment_id is None or segment_id != self._segment_id:
+            return
+        if self.step_times_ms:
+            times = sorted(self.step_times_ms)
+            logger.info(
+                "STT native %s segment %d: %d interim steps, p50 %.0f ms, max %.0f ms",
+                self.model_name,
+                segment_id,
+                len(times),
+                times[len(times) // 2],
+                times[-1],
+            )
+        self.free_segment()
+        self._segment_id = None
+        self._consumed = 0
+        self._text = ""
+        self.step_times_ms = []
 
 
 # ── Resampling ───────────────────────────────────────────────────────────────
@@ -778,7 +922,8 @@ class StreamSession:
     # -- model work --
 
     async def _tick(self) -> None:
-        interval = self.options.interim_interval_ms / 1000
+        interval_ms = self.adapter.interim_interval_ms or self.options.interim_interval_ms
+        interval = interval_ms / 1000
         while True:
             await asyncio.sleep(interval)
             if self._open_id is None or self._chunk_samples <= self._interim_samples:
@@ -799,6 +944,11 @@ class StreamSession:
                 continue  # segment closed or cancelled while queued
             self._busy = True
             try:
+                if job.kind == "final":
+                    more = True
+                    while more:
+                        async with self.lock:
+                            more = await self.adapter.catch_up(job.audio, job.segment_id)
                 async with self.lock:
                     if job.kind == "final":
                         text = await self.adapter.finalize(job.audio, job.segment_id)

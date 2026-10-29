@@ -145,6 +145,7 @@ async def test_stream_maps_events_and_resamples_to_16k():
     assert fake.start_msgs[0]["sample_rate"] == 16000
     assert fake.start_msgs[0]["language"] == "en"
     assert fake.start_msgs[0]["vad"] is True
+    assert "delay_ms" not in fake.start_msgs[0]  # server default
     # FlushSentinel → end_segment; end_input → its own flush, then end
     assert fake.controls == ["end_segment", "end_segment", "end"]
     # 1 s at 16 kHz PCM16 is 32000 bytes (resampler latency can hold a few samples)
@@ -204,11 +205,12 @@ async def test_recognize_sends_one_segment_without_vad():
     runner, url = await _serve(fake)
     try:
         async with utils.http_context.open():
-            vb = VoiceboxSTT(base_url=url)
+            vb = VoiceboxSTT(base_url=url, model="voxtral-realtime-4B", delay_ms=480)
             event = await vb.recognize([_frame(16000, 500)])
     finally:
         await runner.cleanup()
     assert fake.start_msgs[0]["vad"] is False
+    assert fake.start_msgs[0]["delay_ms"] == 480
     assert fake.audio_bytes == 16000  # 0.5 s at 16 kHz PCM16
     assert event.type == stt.SpeechEventType.FINAL_TRANSCRIPT
     assert event.alternatives[0].text == "batch text"

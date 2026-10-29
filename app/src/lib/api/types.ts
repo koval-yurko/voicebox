@@ -145,7 +145,8 @@ export type STTModelName =
   | WhisperModelSize
   | `whisper-${WhisperModelSize}`
   | 'qwen-asr-0.6B'
-  | 'qwen-asr-1.7B';
+  | 'qwen-asr-1.7B'
+  | 'voxtral-realtime-4B';
 
 export type Qwen3ModelSize = '0.6B' | '1.7B' | '4B';
 

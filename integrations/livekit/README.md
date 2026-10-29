@@ -40,6 +40,7 @@ session = AgentSession(
 | `base_url` | `http://127.0.0.1:17493` | Voicebox server. |
 | `vad` | `True` | `True`: the server VAD opens and closes segments. `False`: a segment closes only when the agent flushes the stream. |
 | `interim` | `True` | Ask for interim text. `capabilities.interim_results` follows the server `ready` capabilities. |
+| `delay_ms` | `None` | `voxtral-realtime-4B` only: transcription delay, a multiple of 80 from 80 to 1200, or 2400. Lower is faster with more errors. `None` uses the server default (240). |
 
 Event mapping: `speech_start` → `START_OF_SPEECH`, `interim` → `INTERIM_TRANSCRIPT`, `final` → `FINAL_TRANSCRIPT`, `speech_end` → `END_OF_SPEECH`.
 

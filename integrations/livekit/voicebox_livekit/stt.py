@@ -46,6 +46,7 @@ class STTOptions:
     interim: bool
     interim_interval_ms: int
     max_segment_s: float
+    delay_ms: int | None
     base_url: str
 
     def start_message(self, *, language: str | None, vad: bool | None = None) -> dict:
@@ -61,6 +62,8 @@ class STTOptions:
             msg["model"] = self.model
         if language:
             msg["language"] = language
+        if self.delay_ms is not None:
+            msg["delay_ms"] = self.delay_ms
         return msg
 
 
@@ -75,6 +78,7 @@ class VoiceboxSTT(stt.STT):
         interim: bool = True,
         interim_interval_ms: int = 500,
         max_segment_s: float = 30.0,
+        delay_ms: int | None = None,
         interim_results: bool = False,
         http_session: aiohttp.ClientSession | None = None,
     ) -> None:
@@ -88,6 +92,9 @@ class VoiceboxSTT(stt.STT):
             vad: ``True``: the server VAD opens and closes segments. ``False``: segments
                 close only when the agent flushes the stream (agent VAD / turn detector).
             interim: ask the server for interim text when the model can make it.
+            delay_ms: Voxtral Realtime transcription delay (a multiple of 80 from 80 to
+                1200, or 2400). Lower is faster with more errors. ``None`` uses the server
+                default. Other models ignore it.
             interim_results: the value of ``capabilities.interim_results`` until the first
                 stream gets the server ``ready`` message, which then sets it.
             http_session: aiohttp session; default is the job http session.
@@ -108,6 +115,7 @@ class VoiceboxSTT(stt.STT):
             interim=interim,
             interim_interval_ms=interim_interval_ms,
             max_segment_s=max_segment_s,
+            delay_ms=delay_ms,
             base_url=base_url,
         )
         self._session = http_session

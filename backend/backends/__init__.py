@@ -249,6 +249,7 @@ TTS_ENGINES = {
 STT_ENGINES = {
     "whisper": "Whisper",
     "qwen_asr": "Qwen3-ASR",
+    "voxtral_realtime": "Voxtral Realtime",
 }
 
 # Default STT model when neither the request nor the capture settings name one.
@@ -555,6 +556,24 @@ def _get_qwen_asr_configs() -> list[ModelConfig]:
     ]
 
 
+def _get_voxtral_realtime_configs() -> list[ModelConfig]:
+    """Return Voxtral Realtime STT model configs (MLX only, via mlx-audio)."""
+    from .voxtral_realtime_backend import VOXTRAL_REALTIME_HF_REPOS, VOXTRAL_REALTIME_LANGUAGE_CODES
+
+    return [
+        ModelConfig(
+            model_name="voxtral-realtime-4B",
+            display_name="Voxtral Realtime 4B",
+            engine="voxtral_realtime",
+            hf_repo_id=VOXTRAL_REALTIME_HF_REPOS["4B"],
+            model_size="4B",
+            size_mb=3140,
+            languages=VOXTRAL_REALTIME_LANGUAGE_CODES,
+            stream_adapter="native",
+        ),
+    ]
+
+
 def _get_qwen_llm_configs() -> list[ModelConfig]:
     """Return Qwen3 LLM configs with backend-aware HF repo IDs.
 
@@ -636,9 +655,10 @@ def get_llm_model_configs() -> list[ModelConfig]:
 def get_stt_model_configs() -> list[ModelConfig]:
     """Return only STT model configs (all engines)."""
     configs = _get_whisper_configs()
-    # Qwen3-ASR runs through mlx-audio, so it exists only on the MLX backend.
+    # Qwen3-ASR and Voxtral Realtime run through mlx-audio, so they exist only
+    # on the MLX backend.
     if get_backend_type() == "mlx":
-        configs += _get_qwen_asr_configs()
+        configs += _get_qwen_asr_configs() + _get_voxtral_realtime_configs()
     return configs
 
 
@@ -966,6 +986,10 @@ def get_stt_backend(engine: str = "whisper") -> STTBackend:
             from .qwen_asr_backend import MLXQwenASRBackend
 
             backend = MLXQwenASRBackend()
+        elif engine == "voxtral_realtime":
+            from .voxtral_realtime_backend import MLXVoxtralRealtimeBackend
+
+            backend = MLXVoxtralRealtimeBackend()
         else:
             raise ValueError(f"Unknown STT engine: {engine}. Supported: {list(STT_ENGINES.keys())}")
 
@@ -1039,6 +1063,10 @@ def open_stt_stream(options, vad=None, lock=None):
         from .qwen_asr_streaming import QwenASRRollingStream
 
         adapter = QwenASRRollingStream(backend, config, options.language)
+    elif config.stream_adapter == "native" and config.engine == "voxtral_realtime":
+        from .voxtral_streaming import VoxtralNativeStream
+
+        adapter = VoxtralNativeStream(backend, config, options.language, delay_ms=options.delay_ms)
     else:
         if config.stream_adapter != "segmented":
             logger.warning(

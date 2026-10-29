@@ -384,7 +384,46 @@ Limits:
 
 ## Phase 5 — Optional: Voxtral Realtime
 
-Only if phase 4 is too slow or too unstable. Design doc section 5.4. Phase 4 is fast enough (see the phase 4 results), so phase 5 is not needed for latency.
+Only if phase 4 is too slow or too unstable. Design doc section 5.4. Phase 4 is fast enough (see the phase 4 results), so phase 5 is not needed for latency. The user chose to build it anyway (2026-10-29), as a fallback.
+
+### Phase 5 results (2026-10-29)
+
+Code: `NativeStreamingStream` (base class) in `backend/backends/stt_streaming.py`, `VoxtralNativeStream` in `backend/backends/voxtral_streaming.py`, batch backend `MLXVoxtralRealtimeBackend` in `backend/backends/voxtral_realtime_backend.py`. Model `voxtral-realtime-4B` (engine `voxtral_realtime`, MLX only) with `stream_adapter="native"`. Tests: `backend/tests/test_voxtral_streaming.py` (the model tests need `VOICEBOX_RUN_SLOW=1`).
+
+Weights: `mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit` (3.1 GB). No 8-bit repo with mlx-audio weight names exists: `ellamind/Voxtral-Mini-4B-Realtime-8bit-mlx` and `mlx-community/Voxtral-Mini-4B-Realtime-6bit` use voxmlx names, and `majentik/...-TurboQuant-MLX-8bit` uses Mistral names; all of them also quantize the embeddings, which the mlx-audio decoder reads as a plain matrix.
+
+How it works:
+
+- Only new audio goes through the model: the log-mel of the new frames (the clamp is fixed, so old frames never change), the causal conv stem with a kept tail (2 mel frames, 1 conv frame), the encoder layers with their `RotatingKVCache`s, and 1 decoder step per 80 ms token with the decoder cache kept. The streamed mel equals batch mode (diff < 1e-4).
+- The interim tick of a native adapter is 80 ms (1 token), not `interim_interval_ms`. INTERIM is sent only when the text grows. The text never changes, so `stable_text` equals `text`.
+- The state after the 32 left-pad silence tokens is computed once and copied at each segment start.
+- `end_segment()` pushes (delay + 1) tokens of silence (batch mode adds 10 more; the model emits no EOS and no more text in them). FINAL is the streamed text, and it equals batch-mode text at the same delay on the test clips.
+- Each interim step runs at most 4 decoder steps. Before FINAL, the session calls the new `SegmentAdapter.catch_up()` hook in a loop, with the lock held for 1 call only.
+- MLX threads: the decoder RoPE frequencies are lazy arrays of the load thread; the backend evaluates them at load. The adapter makes its own mel window and filters on the worker thread.
+
+**Delay.** At the model default (480 ms), a word arrives about 0.8 s after its end: the model itself emits a word about 0.7 s after the word end, also in batch mode. The user chose 240 ms as the default (2026-10-29), and the `start` message got a `delay_ms` field (also in the LiveKit plugin). Fleurs WER from the model card: 480 ms 8.72 % average / 4.90 % English, 240 ms 10.80 % / 5.91 %, 160 ms 12.60 % / 6.46 %.
+
+Measured on the Apple M4 Max (4-bit model, fixture at real-time speed in 20 ms frames, server VAD). Word latency = time from the word end (Whisper word timestamps, `FIXTURE_WORD_ENDS`) to the first text with the complete word; the last word of a segment comes with FINAL, so it is not in the word latency:
+
+| Check | Result |
+|---|---|
+| Word latency, delay 480 ms (in process) | p50 0.80 s, max 1.06 s |
+| Word latency, delay 240 ms (`WS /stt/ws`, 3 runs) | p50 0.54-0.57 s, max 0.73 s (the first word, "Hello,") |
+| Word latency, delay 160 ms (in process) | p50 0.49 s, max 0.74 s |
+| FINAL after the speech end (240 ms) | 0.67-0.70 s (VAD end 0.5 s + flush) |
+| Interim step p50 / max (server log) | 28 / 90-116 ms per 80 ms of audio |
+| Flush at FINAL | about 100 ms |
+| FINAL == batch text (same delay) | 2/2 segments + the whole fixture |
+
+TTS (`POST /tts/stream`, Qwen 0.6B, 6 requests each, STT stream of the fixture in a loop): alone median 129 ms; while `voxtral-realtime-4B` streams, median 143-178 ms (max 206 ms); while `qwen-asr-0.6B` streams, median 145 ms (max 163 ms). Before `catch_up()`, a FINAL decoded the audio that waited during a TTS request in 1 lock hold (0.5 s), and the next TTS request waited for it (median 500-555 ms).
+
+LiveKit (`scripts/smoke_stt.py --model voxtral-realtime-4B`, 48 kHz): `INTERIM_TRANSCRIPT` events grow word by word, both FINALs are correct.
+
+Limits:
+
+- The model runs 1 step every 80 ms during speech (about 35 % of the GPU time); between segments it does not run.
+- Voxtral Realtime detects the language itself. A `language` in `start` does not change the text; FINAL `language` is the requested code or null.
+- `POST /transcribe` with `voxtral-realtime-4B` uses the model default delay (480 ms), so its text can differ from the streamed FINAL.
 
 ## 2. Next steps
 

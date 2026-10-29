@@ -91,6 +91,8 @@ const MODEL_DESCRIPTIONS: Record<string, string> = {
     'Qwen3-ASR 0.6B by Alibaba (8-bit, 1.0 GB). The fastest STT model, recommended for English. Supports 30 languages. Runs on the Apple Silicon GPU through MLX.',
   'qwen-asr-1.7B':
     'Qwen3-ASR 1.7B by Alibaba (8-bit, 2.5 GB). Recommended for languages other than English: close to Whisper Turbo on German and Russian. Supports 30 languages. Runs on the Apple Silicon GPU through MLX.',
+  'voxtral-realtime-4B':
+    'Voxtral Mini 4B Realtime by Mistral AI (4-bit, 3.1 GB). Built for live streaming: text arrives about 0.5 s after the speech, and earlier text never changes. Uses the GPU all the time while it streams, so use it only when Qwen3-ASR streaming is not good enough. 13 languages, detected automatically.',
   'qwen3-0.6b':
     'Qwen3 0.6B — smallest of the Qwen3 instruct family. Very fast on CPU, runs at ~400 MB quantized on Apple Silicon. Good for dictation refinement and short completions.',
   'qwen3-1.7b':
@@ -428,7 +430,10 @@ export function ModelManagement() {
     ) ?? [];
   const sttModels =
     modelStatus?.models.filter(
-      (m) => m.model_name.startsWith('whisper') || m.model_name.startsWith('qwen-asr'),
+      (m) =>
+        m.model_name.startsWith('whisper') ||
+        m.model_name.startsWith('qwen-asr') ||
+        m.model_name.startsWith('voxtral'),
     ) ?? [];
   const llmModels = modelStatus?.models.filter((m) => m.model_name.startsWith('qwen3-')) ?? [];
 

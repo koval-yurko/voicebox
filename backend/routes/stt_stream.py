@@ -12,7 +12,7 @@ import json
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..backends import open_stt_stream
 from ..backends.stt_streaming import StreamSession, STTStreamOptions
@@ -36,6 +36,18 @@ class STTStreamStart(BaseModel):
     interim: bool = True
     interim_interval_ms: int = Field(default=500, ge=100, le=5000)
     max_segment_s: float = Field(default=30.0, ge=1.0, le=120.0)
+    delay_ms: int | None = Field(
+        default=None,
+        description="Voxtral Realtime transcription delay: a multiple of 80 from 80 to 1200, or 2400. "
+        "Lower is faster with more errors. Empty uses the server default (240). Other models ignore it.",
+    )
+
+    @field_validator("delay_ms")
+    @classmethod
+    def _check_delay(cls, value: int | None) -> int | None:
+        if value is not None and value != 2400 and not (80 <= value <= 1200 and value % 80 == 0):
+            raise ValueError("delay_ms must be a multiple of 80 from 80 to 1200, or 2400")
+        return value
 
 
 def _default_stt_model() -> str | None:
@@ -63,6 +75,7 @@ async def _open_session(msg: dict) -> StreamSession:
         max_segment_s=start.max_segment_s,
         vad=start.vad,
         interim=start.interim,
+        delay_ms=start.delay_ms,
     )
     session = open_stt_stream(options)
     await session.start()

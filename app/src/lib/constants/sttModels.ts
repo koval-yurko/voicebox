@@ -15,6 +15,7 @@ export const STT_MODEL_LABELS: Record<string, string> = {
   'whisper-turbo': 'Whisper Turbo',
   'qwen-asr-0.6B': 'Qwen3-ASR 0.6B',
   'qwen-asr-1.7B': 'Qwen3-ASR 1.7B',
+  'voxtral-realtime-4B': 'Voxtral Realtime 4B',
 };
 
 /** Convert an old Whisper size (`turbo`) to its full model name (`whisper-turbo`). */
