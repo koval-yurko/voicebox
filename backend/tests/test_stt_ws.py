@@ -61,16 +61,22 @@ def _start(ws, **fields) -> dict:
         ("qwen-asr-1.7B", "qwen_asr", "qwen-asr-1.7B"),
     ],
 )
-def test_start_frames_end_segment_final_end(client, fakes, model, engine, model_name):
+def test_start_frames_end_segment_final_end(client, fakes, monkeypatch, model, engine, model_name):
+    rolling = engine == "qwen_asr"
+    if rolling:
+        # The fake backend has no MLX model: no warm-up step, no interim steps.
+        from backend.backends.qwen_asr_streaming import QwenASRRollingStream
+
+        monkeypatch.setattr(QwenASRRollingStream, "_warm_up", lambda self: None)
     with client.websocket_connect("/stt/ws") as ws:
-        ready = _start(ws, model=model, language="en")
+        ready = _start(ws, model=model, language="en", interim=not rolling)
         assert ready["type"] == "ready"
         assert ready["model"] == model_name
         assert ready["capabilities"] == {
-            "interim_results": False,
-            "revises_text": False,
+            "interim_results": rolling,
+            "revises_text": rolling,
             "native_streaming": False,
-            "min_latency_ms": 300,
+            "min_latency_ms": 600 if rolling else 300,
             "needs_vad": True,
         }
 

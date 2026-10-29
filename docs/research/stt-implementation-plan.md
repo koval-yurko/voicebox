@@ -341,13 +341,50 @@ Notes:
 
 Acceptance:
 
-- [ ] Interim text arrives less than 1.2 s after the speech starts.
-- [ ] FINAL text equals batch text on the test clips.
-- [ ] The LiveKit plugin shows interim transcripts.
+- [x] Interim text arrives less than 1.2 s after the speech starts. 0.25-0.56 s (see the results).
+- [x] FINAL text equals batch text on the test clips.
+- [x] The LiveKit plugin shows interim transcripts.
+
+### Phase 4 results (2026-10-29)
+
+Code: `RollingRedecodeStream` in `backend/backends/stt_streaming.py`, `QwenASRRollingStream` in `backend/backends/qwen_asr_streaming.py`. `stream_adapter="rolling"` is set on `qwen-asr-0.6B` and `qwen-asr-1.7B`. `open_stt_stream()` selects the rolling adapter for them. Tests: `backend/tests/test_qwen_asr_streaming.py` (the model tests need `VOICEBOX_RUN_SLOW=1`; `VOICEBOX_QWEN_ASR_MODELS=qwen-asr-0.6B,qwen-asr-1.7B` runs both models).
+
+The adapter follows section 0.4 and design doc 5.3:
+
+- `finalize()` runs the batch path (`SegmentedBatchStream`, the same `transcribe()` as `POST /transcribe`).
+- The window mel is equal to batch mode (diff 0.0). The window encoder output differs from `get_audio_features()` by at most 1.7e-6.
+- A window closes when 40 samples after its end have arrived (the last frame of the window is then final; the whisper feature extractor drops the last STFT frame).
+- The clamp maximum uses final frames only. When it grows, the closed windows are encoded again and the prefix cache is rebuilt.
+- Rollback 5 tokens, at most 24 new tokens, LocalAgreement-2 on words (the last word of a hypothesis is never committed). The committed words stay at the start of `text`, so `stable_text` never gets shorter inside a segment.
+- A 1-step warm-up on 1 s of silence runs in `prepare()`, so the first real step has no first-run cost.
+- At the end of each segment the server logs the step times: `STT rolling <model> segment <n>: <k> interim steps, p50 .. ms, max .. ms`.
+
+**MLX threads.** MLX 0.32 streams are per thread. A lazy array or a stream made on 1 thread cannot be used on another thread ("There is no Stream(gpu, N) in current thread"). The interim steps run on the per-model worker thread, so the adapter:
+
+- does not use `mlx_lm.generate.generate_step`. Its module-level `generation_stream` belongs to the thread that first imported `mlx_lm.generate` (the `qwen3_asr` module import during model load). The adapter has its own greedy loop with the same prefill split.
+- makes its own copy of the sinusoidal position table. The table in the model is a lazy array of the load thread.
+
+The batch path (`transcribe()`, and so `finalize()`) still runs `generate_step` on the default executor. It works because the event loop reuses the same idle default-executor thread that loaded the model. This was already so in phases 1-2.
+
+Measured on the Apple M4 Max (8-bit models):
+
+| Check | qwen-asr-0.6B | qwen-asr-1.7B |
+|---|---|---|
+| Step p50 / p95 / max, 23 s clip (2 closed windows), 1 step every 0.5 s | 67 / 88 / 141 ms | 120 / 158 / 256 ms |
+| Step p50 / p95 / max, fixture at real-time speed, server VAD | 54 / 73 / 73 ms | 99 / 124 / 124 ms |
+| First interim text after the speech onset (fixture, segments 1 / 2) | 0.54 / 0.26 s | 0.56 / 0.31 s |
+| FINAL == batch text | 2/2 segments + 23 s clip | 2/2 segments + 23 s clip |
+
+LiveKit (`integrations/livekit/scripts/smoke_stt.py`, 48 kHz, real time, server from this branch): `INTERIM_TRANSCRIPT` events arrive every 0.5 s, the first 0.12-0.3 s after `START_OF_SPEECH`. The FINAL text is the same as in phase 3. The server `ready` capabilities are now `interim_results: true, revises_text: true, min_latency_ms: 600`.
+
+Limits:
+
+- LocalAgreement-2 works on words split at spaces. For languages with no spaces (Chinese, Japanese), `stable_text` stays empty until FINAL; `text` still updates.
+- The interim text can end with "." on cut audio ("This is the first sentence for the."). FINAL replaces it.
 
 ## Phase 5 — Optional: Voxtral Realtime
 
-Only if phase 4 is too slow or too unstable. Design doc section 5.4.
+Only if phase 4 is too slow or too unstable. Design doc section 5.4. Phase 4 is fast enough (see the phase 4 results), so phase 5 is not needed for latency.
 
 ## 2. Next steps
 

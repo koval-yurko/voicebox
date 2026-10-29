@@ -7,7 +7,7 @@ Layers::
 
     client frames ──► StreamSession ──► VADSegmenter ──► model adapter ──► STTEvents
                       PCM16 → float32   Silero VAD        SegmentedBatchStream (any batch model)
-                      resample 16 kHz   endpointing       later: rolling / native adapters
+                      resample 16 kHz   endpointing       RollingRedecodeStream (re-decode, interim text)
 
 ``StreamSession`` implements ``STTStream``. It owns the event queue, the
 segment buffer and 1 worker task that runs the model steps in order. Each
@@ -238,6 +238,156 @@ class SegmentedBatchStream(SegmentAdapter):
 
     async def finalize(self, audio: np.ndarray, segment_id: int) -> str:
         return await self._transcribe(audio)
+
+
+ROLLING_CAPABILITIES = STTStreamCapabilities(
+    interim_results=True,
+    revises_text=True,
+    native_streaming=False,
+    min_latency_ms=600,
+    needs_vad=True,
+)
+
+
+def _common_prefix_len(a: list[str], b: list[str]) -> int:
+    n = 0
+    for x, y in zip(a, b, strict=False):
+        if x != y:
+            break
+        n += 1
+    return n
+
+
+class RollingRedecodeStream(SegmentAdapter):
+    """Base class for encoder-decoder / audio-LLM models: re-decode at each tick.
+
+    Design doc section 5.2. Each interim step:
+
+    1. ``encode_incremental()`` with the open segment audio.
+    2. Text prefix = the committed text tokens minus the last ``rollback_tokens``.
+    3. ``decode(prefix, max_new_tokens)`` → hypothesis.
+    4. LocalAgreement-2: the complete words that 2 hypotheses in a row agree
+       on are committed. ``stable_text`` (the committed words) never gets
+       shorter inside a segment. It is stable within the current hypothesis
+       only: FINAL can still change it.
+
+    The model hooks are blocking. They run on the model's worker thread, 1 at
+    a time, so a subclass needs no locks for its segment state.
+    """
+
+    rollback_tokens = 5
+    max_new_tokens = 24
+
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+        self.capabilities = ROLLING_CAPABILITIES
+        self.step_times_ms: list[float] = []  # interim step times of the current segment
+        self._segment_id: int | None = None
+        self._committed: list[str] = []  # committed words
+        self._previous: list[str] = []  # words of the previous hypothesis
+
+    # -- model hooks (blocking, on the worker thread) --
+
+    def begin_segment(self) -> None:
+        """Set up the per-segment model state."""
+
+    def encode_incremental(self, audio: np.ndarray) -> None:
+        """Update the encoder state. ``audio`` is the complete open segment so far."""
+        raise NotImplementedError
+
+    def decode(self, prefix_ids: list[int], max_new: int) -> list[int]:
+        """Greedy decode on the current audio state, forced to start with ``prefix_ids``.
+
+        Returns only the new tokens.
+        """
+        raise NotImplementedError
+
+    def encode_text(self, text: str) -> list[int]:
+        raise NotImplementedError
+
+    def decode_text(self, ids: list[int]) -> str:
+        raise NotImplementedError
+
+    def free_segment(self) -> None:
+        """Free the per-segment model state."""
+
+    # -- SegmentAdapter --
+
+    async def interim(self, audio: np.ndarray, segment_id: int) -> tuple[str, str] | None:
+        return await run_blocking(self.model_name, self._interim_step, audio, segment_id)
+
+    def reset(self, segment_id: int) -> None:
+        # A step of this segment can still run on the worker thread (cancel
+        # during a step), so the state is cleared there, after that step.
+        get_model_executor(self.model_name).submit(self._clear, segment_id)
+
+    # -- steps --
+
+    def _begin(self, segment_id: int) -> None:
+        self._clear(self._segment_id)
+        self._segment_id = segment_id
+        self.begin_segment()
+
+    def _clear(self, segment_id: int | None) -> None:
+        if segment_id is None or segment_id != self._segment_id:
+            return
+        if self.step_times_ms:
+            times = sorted(self.step_times_ms)
+            logger.info(
+                "STT rolling %s segment %d: %d interim steps, p50 %.0f ms, max %.0f ms",
+                self.model_name,
+                segment_id,
+                len(times),
+                times[len(times) // 2],
+                times[-1],
+            )
+        self.free_segment()
+        self._segment_id = None
+        self._committed = []
+        self._previous = []
+        self.step_times_ms = []
+
+    def _interim_step(self, audio: np.ndarray, segment_id: int) -> tuple[str, str]:
+        import time
+
+        if segment_id != self._segment_id:
+            self._begin(segment_id)
+        started = time.perf_counter()
+        self.encode_incremental(audio)
+        committed_ids = self.encode_text(" ".join(self._committed)) if self._committed else []
+        prefix = committed_ids[: max(0, len(committed_ids) - self.rollback_tokens)]
+        new_ids = self.decode(prefix, self.max_new_tokens)
+        hypothesis = self.decode_text(prefix + new_ids)
+        text, stable = self.agree(hypothesis)
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        self.step_times_ms.append(elapsed_ms)
+        logger.debug(
+            "STT rolling step %s seg %d: %.1f s audio, %.0f ms, stable=%r text=%r",
+            self.model_name,
+            segment_id,
+            len(audio) / STREAM_SAMPLE_RATE,
+            elapsed_ms,
+            stable,
+            text,
+        )
+        return text, stable
+
+    def agree(self, hypothesis: str) -> tuple[str, str]:
+        """LocalAgreement-2 on words. Returns ``(text, stable_text)``.
+
+        The committed words stay at the start of ``text``, also when the
+        rolled-back tokens decode differently this time. The last word of a
+        hypothesis is never committed: the audio or the token limit can cut it.
+        """
+        words = hypothesis.split()
+        n = len(self._committed)
+        if words[:n] != self._committed:
+            words = self._committed + words[n:]
+        agreed = _common_prefix_len(words[:-1], self._previous[:-1])
+        if agreed > n:
+            self._committed = words[:agreed]
+        self._previous = words
+        return " ".join(words), " ".join(self._committed)
 
 
 # ── Resampling ───────────────────────────────────────────────────────────────

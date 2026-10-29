@@ -540,6 +540,7 @@ def _get_qwen_asr_configs() -> list[ModelConfig]:
             model_size="0.6B",
             size_mb=1010,
             languages=QWEN_ASR_LANGUAGE_CODES,
+            stream_adapter="rolling",
         ),
         ModelConfig(
             model_name="qwen-asr-1.7B",
@@ -549,6 +550,7 @@ def _get_qwen_asr_configs() -> list[ModelConfig]:
             model_size="1.7B",
             size_mb=2470,
             languages=QWEN_ASR_LANGUAGE_CODES,
+            stream_adapter="rolling",
         ),
     ]
 
@@ -1033,13 +1035,18 @@ def open_stt_stream(options, vad=None, lock=None):
 
     config = resolve_stt_model(options.model)
     backend = get_stt_backend(config.engine)
-    if config.stream_adapter != "segmented":
-        logger.warning(
-            "STT stream adapter %r is not available for %s; using 'segmented'",
-            config.stream_adapter,
-            config.model_name,
-        )
-    adapter = SegmentedBatchStream(backend, config, options.language)
+    if config.stream_adapter == "rolling" and config.engine == "qwen_asr":
+        from .qwen_asr_streaming import QwenASRRollingStream
+
+        adapter = QwenASRRollingStream(backend, config, options.language)
+    else:
+        if config.stream_adapter != "segmented":
+            logger.warning(
+                "STT stream adapter %r is not available for %s; using 'segmented'",
+                config.stream_adapter,
+                config.model_name,
+            )
+        adapter = SegmentedBatchStream(backend, config, options.language)
     return StreamSession(adapter, options, vad=vad, lock=lock)
 
 

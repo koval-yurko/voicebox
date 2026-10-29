@@ -325,9 +325,9 @@ def mlx_registry(monkeypatch):
 
 @pytest.mark.parametrize(
     ("model", "engine", "model_size"),
-    [("turbo", "whisper", "turbo"), ("whisper-base", "whisper", "base"), ("qwen-asr-0.6B", "qwen_asr", "0.6B")],
+    [("turbo", "whisper", "turbo"), ("whisper-base", "whisper", "base")],
 )
-async def test_open_stt_stream_uses_segmented_adapter_for_every_model(mlx_registry, model, engine, model_size):
+async def test_open_stt_stream_uses_segmented_adapter_for_whisper(mlx_registry, model, engine, model_size):
     session = backends.open_stt_stream(STTStreamOptions(model=model, vad=False), lock=asyncio.Lock())
     assert isinstance(session.adapter, SegmentedBatchStream)
     assert session.adapter.config.engine == engine
@@ -337,6 +337,19 @@ async def test_open_stt_stream_uses_segmented_adapter_for_every_model(mlx_regist
     events = await _close_and_collect(session)
     assert [e.type for e in events] == [STTEventType.FINAL]
     assert backends._stt_backends[engine].calls[0][2] == model_size
+
+
+@pytest.mark.parametrize(("model", "model_size"), [("qwen-asr-0.6B", "0.6B"), ("qwen-asr-1.7B", "1.7B")])
+def test_open_stt_stream_uses_rolling_adapter_for_qwen_asr(mlx_registry, model, model_size):
+    from backend.backends.qwen_asr_streaming import QwenASRRollingStream
+
+    session = backends.open_stt_stream(STTStreamOptions(model=model, language="de", vad=False), lock=asyncio.Lock())
+    assert isinstance(session.adapter, QwenASRRollingStream)
+    assert session.adapter.config.stream_adapter == "rolling"
+    assert session.adapter.config.model_size == model_size
+    assert session.adapter.language == "de"
+    assert session.capabilities.interim_results is True
+    assert session.capabilities.revises_text is True
 
 
 def test_open_stt_stream_rejects_unknown_model(mlx_registry):
