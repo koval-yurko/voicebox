@@ -317,6 +317,21 @@ Acceptance:
 - [ ] A local LiveKit agent session transcribes speech through Voicebox, with final transcripts in the agent log.
 - [ ] Barge-in works: user speech during TTS stops the agent speech.
 
+### Phase 3 results (2026-10-29)
+
+Package `integrations/livekit/voicebox_livekit` (own `pyproject.toml`, `livekit-agents~=1.8`, checked against livekit-agents 1.8.10): `VoiceboxSTT` on `WS /stt/ws` and `VoiceboxTTS` on `WS /tts/ws`. No Voicebox TTS plugin for LiveKit existed, so phase 3 adds it. Example agent: `integrations/livekit/examples/voice_agent.py` (echo mode with no LLM, or a local Ollama model).
+
+Checks on the Apple M4 Max (STT: server from this branch on port 17499; TTS: the installed Voicebox app on port 17493, Qwen 1.7B voice):
+
+- `scripts/smoke_stt.py`: the fixture at 48 kHz in 20 ms frames, real-time speed. `qwen-asr-0.6B` gave both phrases correctly, FINAL 90-120 ms after `speech_end`. With `vad=False` and 1 flush, 1 FINAL for all the audio.
+- `scripts/e2e_session.py`: a full `AgentSession` (Silero VAD, `VoiceboxSTT`, `VoiceboxTTS`, echo agent) with a fake mic and speaker. Both final transcripts were correct. User speech 1.5 s into the agent reply stopped the agent 1.3 s after the audio started (about 0.6 s after the speech onset; `min_interruption_duration` is 0.5 s). The agent reply started about 1.1 s after the FINAL.
+
+Notes:
+
+- The plugin sets `manual_flush=True`: the agent VAD end of speech sends `end_segment`. When the server VAD has already closed the segment, `end_segment` does nothing.
+- `AgentSession` default `aec_warmup_duration=3.0` sends silence to the STT for the first 3 s of each agent reply. A barge-in in that time loses its first words in the transcript (seen in the first e2e run: "And now the second part" became "Can part"). The e2e script sets `aec_warmup_duration=None` (no echo with a fake speaker).
+- Server `final` messages have `language: null` when the language is not forced; the plugin then uses the `language` option.
+
 ## Phase 4 — Qwen3-ASR rolling streaming adapter
 
 - `RollingRedecodeStream` base class (design doc section 5.2) in `backend/backends/stt_streaming.py`.
