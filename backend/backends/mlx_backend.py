@@ -5,7 +5,6 @@ MLX backend implementation for TTS and STT using mlx-audio.
 from typing import AsyncIterator, Optional, List, Tuple
 import asyncio
 import logging
-import threading
 import numpy as np
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -372,77 +371,86 @@ class MLXTTSBackend:
     ) -> AsyncIterator[Tuple[np.ndarray, int]]:
         """Yield audio chunks while the model decodes (mlx-audio stream=True).
 
-        The mlx-audio generator runs in a worker thread and hands each decoded
-        chunk to the event loop. Closing or cancelling this async generator
-        stops the worker at its next chunk.
+        Each decode step is a separate job on the MLX worker thread, so other
+        MLX work (STT) can run between chunks. The next chunk decodes while the
+        caller handles the current one. Closing or cancelling this async
+        generator stops decoding after the step in progress.
         """
-        await self.load_model_async(None)
-
-        loop = asyncio.get_running_loop()
-        chunks: asyncio.Queue = asyncio.Queue()
-        stop = threading.Event()
         done = object()
+        state: dict = {}
 
-        def _put(item):
-            loop.call_soon_threadsafe(chunks.put_nowait, item)
+        def _open_sync():
+            if self.model is None or self._current_model_size != self.model_size:
+                self._reload_sync(self.model_size)
+            # Bind the model once so an unload_model() mid-stream cannot pull it away.
+            model = self.model
+            lang = LANGUAGE_CODE_TO_NAME.get(language, "auto")
+            if seed is not None:
+                import mlx.core as mx
 
-        def _stream_sync():
+                np.random.seed(seed)
+                mx.random.seed(seed)
+
+            kwargs = {"lang_code": lang, "stream": True, "streaming_interval": interval_s}
+            ref_audio = voice_prompt.get("ref_audio") or voice_prompt.get("ref_audio_path")
+            if ref_audio and not Path(ref_audio).exists():
+                logger.warning("Audio file not found: %s; streaming without voice prompt", ref_audio)
+                ref_audio = None
+
+            if ref_audio and supports_cached_icl(model):
+                gen = stream_icl(
+                    model,
+                    text,
+                    self._icl_reference_cached(ref_audio),
+                    voice_prompt.get("ref_text", ""),
+                    language=lang,
+                    chunk_tokens=max(1, int(interval_s * 12.5)),
+                )
+                sample_rate = model.sample_rate
+                state["results"] = ((audio, sample_rate) for audio in gen)
+            else:
+                if ref_audio:
+                    kwargs["ref_audio"] = ref_audio
+                    kwargs["ref_text"] = voice_prompt.get("ref_text", "")
+                gen = model.generate(text, **kwargs)
+                state["results"] = ((result.audio, result.sample_rate) for result in gen)
+            state["gen"] = gen
+
+        def _next_sync():
             try:
-                lang = LANGUAGE_CODE_TO_NAME.get(language, "auto")
-                if seed is not None:
-                    import mlx.core as mx
+                audio, sample_rate = next(state["results"])
+            except StopIteration:
+                return done
+            return np.asarray(audio, dtype=np.float32), sample_rate
 
-                    np.random.seed(seed)
-                    mx.random.seed(seed)
+        def _close_sync():
+            state.pop("results", None)
+            gen = state.pop("gen", None)
+            if gen is not None:
+                gen.close()
+            if self.model is None:
+                empty_mlx_cache()
 
-                kwargs = {"lang_code": lang, "stream": True, "streaming_interval": interval_s}
-                ref_audio = voice_prompt.get("ref_audio") or voice_prompt.get("ref_audio_path")
-                if ref_audio and not Path(ref_audio).exists():
-                    logger.warning("Audio file not found: %s; streaming without voice prompt", ref_audio)
-                    ref_audio = None
+        async with self._op_lock:
+            await _run_on_mlx_thread(_open_sync)
 
-                if ref_audio and supports_cached_icl(self.model):
-                    gen = stream_icl(
-                        self.model,
-                        text,
-                        self._icl_reference_cached(ref_audio),
-                        voice_prompt.get("ref_text", ""),
-                        language=lang,
-                        chunk_tokens=max(1, int(interval_s * 12.5)),
-                    )
-                    results = ((audio, self.model.sample_rate) for audio in gen)
-                else:
-                    if ref_audio:
-                        kwargs["ref_audio"] = ref_audio
-                        kwargs["ref_text"] = voice_prompt.get("ref_text", "")
-                    gen = self.model.generate(text, **kwargs)
-                    results = ((result.audio, result.sample_rate) for result in gen)
-                try:
-                    for audio, sample_rate in results:
-                        if stop.is_set():
-                            break
-                        _put((np.asarray(audio, dtype=np.float32), sample_rate))
-                finally:
-                    gen.close()
-            except BaseException as e:  # forwarded to the async side
-                _put(e)
-            finally:
-                _put(done)
-
-        worker = loop.run_in_executor(None, _stream_sync)
+        pending = None
         try:
+            pending = _run_on_mlx_thread(_next_sync)
             while True:
-                item = await chunks.get()
+                item = await pending
                 if item is done:
                     break
-                if isinstance(item, BaseException):
-                    raise item
+                pending = _run_on_mlx_thread(_next_sync)
                 yield item
         finally:
-            stop.set()
-            # Wait for the worker so the next generation never overlaps it on the GPU.
+            if pending is not None and not pending.done():
+                pending.cancel()
+            # The executor has 1 worker and runs jobs in order, so the close
+            # runs after any step in progress.
+            closing = _run_on_mlx_thread(_close_sync)
             try:
-                await asyncio.wait_for(asyncio.shield(worker), timeout=30)
+                await closing
             except BaseException:
                 pass
 

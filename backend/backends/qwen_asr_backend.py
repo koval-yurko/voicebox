@@ -6,12 +6,12 @@ extra dependency is needed. Qwen3-ASR takes language *names* ("English"), not
 ISO codes — ``to_qwen_language`` converts the codes the rest of the app uses.
 """
 
-import asyncio
 import logging
 from collections.abc import Iterable
 
 from . import LANGUAGE_CODE_TO_NAME
 from .base import is_model_cached, model_load_progress
+from .mlx_backend import _run_on_mlx_thread
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ class MLXQwenASRBackend:
         if self.model is not None and self.model_size == model_size:
             return
 
-        await asyncio.to_thread(self._load_model_sync, model_size)
+        await _run_on_mlx_thread(self._load_model_sync, model_size)
 
     load_model = load_model_async
 
@@ -156,4 +156,4 @@ class MLXQwenASRBackend:
             )
             return result.text.strip()
 
-        return await asyncio.to_thread(_transcribe_sync)
+        return await _run_on_mlx_thread(_transcribe_sync)

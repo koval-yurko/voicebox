@@ -290,7 +290,7 @@ async def _batch_text(adapter, audio: np.ndarray) -> str:
         finally:
             model._ensure_ada_scales(None)
 
-    return await asyncio.to_thread(generate)
+    return await run_blocking(adapter.model_name, generate)
 
 
 @slow
@@ -318,7 +318,7 @@ async def test_streamed_mel_equals_batch_mode(voxtral_backend):
         parts = [adapter._log_mel(a * 8, b * 8) for a, b in ((0, 5), (5, 31), (31, n_tokens - 1))]
         return np.array(mx.concatenate(parts, axis=0))
 
-    batch_mel = await asyncio.to_thread(batch)
+    batch_mel = await run_blocking(adapter.model_name, batch)
     mel = await run_blocking(adapter.model_name, streamed)
     assert np.abs(mel - batch_mel[: mel.shape[0]]).max() < 1e-4
 

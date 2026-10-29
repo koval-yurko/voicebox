@@ -179,7 +179,17 @@ _executors_lock = threading.Lock()
 
 
 def get_model_executor(model_name: str) -> ThreadPoolExecutor:
-    """1 worker thread per model for blocking stream work."""
+    """1 worker thread per model for blocking stream work.
+
+    On MLX all models share the 1 MLX worker thread: MLX GPU streams belong
+    to the thread that made them (see ``mlx_backend._mlx_executor``).
+    """
+    from ..utils.platform_detect import get_backend_type
+
+    if get_backend_type() == "mlx":
+        from .mlx_backend import _mlx_executor
+
+        return _mlx_executor
     with _executors_lock:
         executor = _executors.get(model_name)
         if executor is None:

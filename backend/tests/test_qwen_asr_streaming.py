@@ -280,7 +280,7 @@ async def test_window_mel_and_encoder_equal_batch_mode(qwen_backend):
         enc = [np.array(adapter._encode_window(m).astype(mx.float32)) for m in mels]
         return np.concatenate(mels, axis=1), np.concatenate(enc)
 
-    batch_mel, batch_enc = await asyncio.to_thread(batch)
+    batch_mel, batch_enc = await run_blocking(adapter.model_name, batch)
     mel, enc = await run_blocking(adapter.model_name, windowed)
     assert mel.shape == batch_mel.shape
     assert np.abs(mel - batch_mel).max() == 0.0

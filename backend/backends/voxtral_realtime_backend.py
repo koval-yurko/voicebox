@@ -7,10 +7,10 @@ the batch path (``POST /transcribe``). Voxtral Realtime detects the language
 by itself and takes no language prompt.
 """
 
-import asyncio
 import logging
 
 from .base import is_model_cached, model_load_progress
+from .mlx_backend import _run_on_mlx_thread
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class MLXVoxtralRealtimeBackend:
         if self.model is not None and self.model_size == model_size:
             return
 
-        await asyncio.to_thread(self._load_model_sync, model_size)
+        await _run_on_mlx_thread(self._load_model_sync, model_size)
 
     load_model = load_model_async
 
@@ -101,4 +101,4 @@ class MLXVoxtralRealtimeBackend:
         def _transcribe_sync():
             return self.model.generate(str(audio_path)).text.strip()
 
-        return await asyncio.to_thread(_transcribe_sync)
+        return await _run_on_mlx_thread(_transcribe_sync)
