@@ -376,6 +376,16 @@ def build_server(cuda=False, rocm=False):
             "mcp",
             "--hidden-import",
             "sse_starlette",
+            "--hidden-import",
+            "backend.backends.stt_streaming",
+            "--hidden-import",
+            "backend.routes.stt_stream",
+            "--hidden-import",
+            "onnxruntime",
+            # Silero VAD for WS /stt/ws: the app loads only the ONNX model
+            # file from silero_vad/data (it does not import the package).
+            "--collect-data",
+            "silero_vad",
         ]
     )
 

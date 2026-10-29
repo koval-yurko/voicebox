@@ -12,6 +12,7 @@ and a model config registry that eliminates per-engine dispatch maps.
 # HF_HUB_OFFLINE=1 and on network failures.
 from ..utils import hf_offline_patch  # noqa: F401
 
+import logging
 import threading
 from dataclasses import dataclass, field
 from typing import Protocol, Optional, Tuple, List
@@ -22,6 +23,8 @@ DEFAULT_LLM_MAX_TOKENS = 512
 DEFAULT_LLM_TEMPERATURE = 0.7
 
 from ..utils.platform_detect import get_backend_type
+
+logger = logging.getLogger(__name__)
 
 LANGUAGE_CODE_TO_NAME = {
     "zh": "chinese",
@@ -67,6 +70,7 @@ class ModelConfig:
     retries_runaway: bool = False
     supports_instruct: bool = False
     languages: list[str] = field(default_factory=lambda: ["en"])
+    stream_adapter: str = "segmented"  # STT only: "segmented" | "rolling" | "native"
 
 
 @runtime_checkable
@@ -1014,6 +1018,29 @@ def set_llm_config(
         _custom_llm_api_key = api_key
         if changed:
             _llm_backends.pop(_OPENAI_COMPAT_CACHE_KEY, None)
+
+
+def open_stt_stream(options, vad=None, lock=None):
+    """Open a streaming STT session for ``options.model``.
+
+    Resolves the model (full name or old Whisper size) and selects the adapter
+    from ``ModelConfig.stream_adapter``. Call ``await session.start()`` next.
+
+    Raises:
+        ValueError: the model name matches no STT model.
+    """
+    from .stt_streaming import SegmentedBatchStream, StreamSession
+
+    config = resolve_stt_model(options.model)
+    backend = get_stt_backend(config.engine)
+    if config.stream_adapter != "segmented":
+        logger.warning(
+            "STT stream adapter %r is not available for %s; using 'segmented'",
+            config.stream_adapter,
+            config.model_name,
+        )
+    adapter = SegmentedBatchStream(backend, config, options.language)
+    return StreamSession(adapter, options, vad=vad, lock=lock)
 
 
 def get_llm_backend() -> LLMBackend:

@@ -279,10 +279,31 @@ Full design: `docs/research/stt-streaming-design.md` sections 3-7.
 
 ### Phase 2 acceptance criteria
 
-- [ ] `WS /stt/ws` streams FINAL text for every registered STT model (Whisper, Qwen3-ASR).
-- [ ] The server VAD emits `speech_start` / `speech_end` and closes segments by itself.
-- [ ] TTS streaming still works while STT streams (manual check: first TTS chunk latency does not double).
-- [ ] The batch routes do not change their behavior.
+- [x] `WS /stt/ws` streams FINAL text for every registered STT model (Whisper, Qwen3-ASR).
+- [x] The server VAD emits `speech_start` / `speech_end` and closes segments by itself.
+- [x] TTS streaming still works while STT streams (manual check: first TTS chunk latency does not double).
+- [x] The batch routes do not change their behavior.
+
+### Phase 2 results (2026-10-29)
+
+Manual check on the Apple M4 Max, server from the phase 2 branch, fixture `backend/tests/fixtures/speech_pause_speech_16k.wav` (2 phrases, macOS `say`) sent at real-time speed in 20 ms frames, server VAD on.
+
+| Model | FINAL text (both phrases) | Time from `speech_end` to `final` |
+|---|---|---|
+| `whisper-turbo` (16 kHz and 48 kHz input) | correct | 255-286 ms |
+| `whisper-base` | correct, but trailing "....." (Whisper on the 500 ms silence tail; batch gives the same) | 331-358 ms |
+| `qwen-asr-0.6B` | correct | 97-127 ms |
+| `qwen-asr-1.7B` | correct ("Hello." in place of "Hello,") | 159-171 ms |
+
+TTS (`POST /tts/stream`, Qwen 0.6B) first chunk, 6 requests each: alone median 448 ms; while `qwen-asr-1.7B` streams, median 451 ms (max 564 ms); while `whisper-turbo` streams, median 445 ms. The other way round, a FINAL waits for a running TTS request, because `/tts/stream` holds `inference_lock` for the complete request: FINAL latency went up to 1.6-2.0 s during TTS. For an agent this is normally fine (the user does not speak while the agent speaks, and barge-in cancels TTS). A priority lock or per-chunk locking in TTS can fix it later.
+
+Implementation notes:
+
+- Resampling uses `soxr.ResampleStream` (the librosa resampling backend) instead of `librosa.resample`, so frame edges give no clicks.
+- Silero VAD runs from the ONNX file of the `silero-vad` package with `onnxruntime` and numpy. The `silero_vad` Python package is not imported, because it imports torch.
+- `SegmentedBatchStream` calls the batch `transcribe()` of the backend, so FINAL text equals `POST /transcribe` on the same audio. The 1-thread executor per model is used for the temp WAV and is ready for the phase 4 adapters, which run raw MLX steps.
+- Every closed segment with audio gets exactly 1 FINAL, also when the text is empty.
+- PyInstaller: `build_binary.py` passes `--collect-data silero_vad` (about 13 MB of model files; the generated spec gets `collect_data_files('silero_vad')`). In the frozen binary the package is not importable, so the app reads `sys._MEIPASS/silero_vad/data/silero_vad.onnx`. Checked on 2026-10-29: the frozen `voicebox-server` (584 MB) streamed the fixture through `WS /stt/ws` with the server VAD, and `whisper-turbo` and `qwen-asr-0.6B` gave the correct FINAL text. The first FINAL after the start was slower (0.7-1.3 s, first MLX run); the next FINALs were as fast as in the dev server.
 
 ## Phase 3 — LiveKit plugin
 
