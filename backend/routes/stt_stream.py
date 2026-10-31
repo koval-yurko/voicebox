@@ -3,7 +3,7 @@
 ``WS /stt/ws`` takes PCM16 audio frames and sends text events back. It works
 for every registered STT model: models with no streaming adapter go through
 ``SegmentedBatchStream`` (FINAL text only). Protocol:
-``docs/research/stt-streaming-design.md`` section 7.
+``docs-internal/research/stt-streaming-design.md`` section 7.
 """
 
 import asyncio

@@ -47,16 +47,6 @@ setup-python:
         "{{ python }}" -m pip --version >/dev/null 2>&1
     }
 
-    # Every interpreter on PATH that could be the pinned version, plus uv's, which
-    # keeps its Pythons off PATH. More than one can match, and the first is not
-    # necessarily the good one.
-    candidates() {
-        type -aP "python{{ python_version }}" python3 python 2>/dev/null || true
-        if command -v uv >/dev/null 2>&1; then
-            uv python find "{{ python_version }}" 2>/dev/null || true
-        fi
-    }
-
     # Reuse the venv only if it is on the pinned version and has a working pip: a
     # wrong-version venv resolves dependencies against the wrong Python, and a
     # broken pip means an earlier `-m venv` was interrupted or the venv was moved.
@@ -65,36 +55,21 @@ setup-python:
         rm -rf "{{ venv }}"
     fi
 
-    if [ ! -d "{{ venv }}" ]; then
-        # Building the venv is itself the test, so there is no separate probe to keep
-        # in sync. An interpreter can report the right version and still fail inside
-        # `-m venv` — Debian packages ensurepip separately, and Homebrew has shipped a
-        # pyexpat that won't dlopen — so fall through to the next candidate rather
-        # than giving up on the first. Their output is held back until every candidate
-        # has failed, so a run that recovers doesn't look like a broken one.
-        log="$(mktemp)"
-        while IFS= read -r py; do
-            is_pinned "$py" || continue
-            echo "Creating Python virtual environment with $py ..."
-            "$py" -m venv "{{ venv }}" >>"$log" 2>&1 && pip_works && break
-            echo "  ...it reports {{ python_version }} but cannot build a working venv; trying the next."
-            rm -rf "{{ venv }}"
-        done < <(candidates | sed 's|//*|/|g' | awk '!seen[$0]++')
-        pip_works || cat "$log"
-        rm -f "$log"
-    fi
-
-    if ! pip_works; then
-        echo ""
-        echo "ERROR: Voicebox needs a Python {{ python_version }} that can create virtual"
-        echo "       environments (see requires-python in backend/pyproject.toml)."
-        echo "  Any:    uv python install {{ python_version }}"
-        echo "  macOS:  brew install python@{{ python_version }}"
-        echo "  Debian: sudo apt install python{{ python_version }} python{{ python_version }}-venv"
+    if ! command -v uv >/dev/null 2>&1; then
+        echo "ERROR: setup needs uv to manage Python {{ python_version }}."
+        echo "  macOS:  brew install uv"
+        echo "  Any:    curl -LsSf https://astral.sh/uv/install.sh | sh"
         echo ""
         echo "Then re-run: just setup"
         exit 1
     fi
+
+    # uv downloads Python {{ python_version }} if it is missing; --seed adds pip to the venv
+    if [ ! -d "{{ venv }}" ]; then
+        echo "Creating Python virtual environment..."
+        uv venv --seed --python "{{ python_version }}" "{{ venv }}"
+    fi
+
     echo "Installing Python dependencies..."
     "{{ python }}" -m pip install --upgrade pip -q
     if [ "$(uname)" = "Linux" ]; then

@@ -1,6 +1,6 @@
 """LiveKit Agents STT plugin for Voicebox ``WS /stt/ws``.
 
-Protocol: ``docs/research/stt-streaming-design.md`` sections 7 and 8.
+Protocol: ``docs-internal/research/stt-streaming-design.md`` sections 7 and 8.
 """
 
 from __future__ import annotations

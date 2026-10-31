@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voicebox Project Map</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#16181d;--mute:#5d6572;--line:#d9dde3;--acc:#3b5bdb;--accbg:#e7ecff;
+--ui:#2f9e44;--api:#3b5bdb;--eng:#e8590c;--nat:#ae3ec9;--ext:#0c8599;--data:#868e96}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#101216;--panel:#181b21;--ink:#e8eaee;--mute:#9aa3b0;--line:#2b303a;--acc:#7c93ff;--accbg:#232a4a;
+--ui:#51cf66;--api:#7c93ff;--eng:#ff922b;--nat:#da77f2;--ext:#3bc9db;--data:#adb5bd}}
+:root[data-theme=dark]{--bg:#101216;--panel:#181b21;--ink:#e8eaee;--mute:#9aa3b0;--line:#2b303a;--acc:#7c93ff;--accbg:#232a4a;
+--ui:#51cf66;--api:#7c93ff;--eng:#ff922b;--nat:#da77f2;--ext:#3bc9db;--data:#adb5bd}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:28px 16px 12px;max-width:1100px;margin:0 auto}
+h1{margin:0 0 4px;font-size:26px}
+header p{margin:0;color:var(--mute);max-width:70ch}
+nav{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);z-index:5}
+nav div{max-width:1100px;margin:0 auto;padding:8px 16px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+nav button.tab{background:none;border:1px solid transparent;color:var(--mute);padding:6px 12px;border-radius:999px;cursor:pointer;font:inherit}
+nav button.tab[aria-selected=true]{background:var(--accbg);color:var(--acc);border-color:var(--acc)}
+nav .sp{flex:1}
+main{max-width:1100px;margin:0 auto;padding:16px}
+section{display:none}section.on{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.grid{display:grid;gap:16px;grid-template-columns:1fr 340px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.layer{border:1px dashed var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.layer h3{margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.nodes{display:flex;flex-wrap:wrap;gap:8px}
+.node{border:1px solid var(--line);border-left:5px solid var(--c);background:var(--panel);color:var(--ink);border-radius:8px;padding:8px 12px;cursor:pointer;font:inherit;text-align:left}
+.node:hover,.node[aria-pressed=true]{outline:2px solid var(--c)}
+.node small{display:block;color:var(--mute);font-size:12px}
+.arrow{text-align:center;color:var(--mute);font-size:12px;margin:-4px 0 8px}
+#detail h2{margin:0 0 4px;font-size:18px}
+#detail .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--mute);margin-bottom:8px}
+#detail ul{padding-left:18px;margin:8px 0}
+code{font:12.5px ui-monospace,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+.steps{display:flex;flex-direction:column;gap:0}
+.step{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.step:last-child{border:0}
+.step .n{flex:none;width:26px;height:26px;border-radius:50%;background:var(--line);display:grid;place-items:center;font-size:12px;color:var(--mute)}
+.step.on .n{background:var(--acc);color:#fff}
+.step.on{background:var(--accbg);margin:0 -8px;padding:10px 8px;border-radius:8px}
+.step b{display:block}
+.step span{color:var(--mute);font-size:13.5px}
+.ctl{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.btn{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;font:inherit}
+.btn[aria-pressed=true]{background:var(--accbg);border-color:var(--acc);color:var(--acc)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.tw{overflow-x:auto}
+input[type=search]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;margin-bottom:10px}
+.tree{font:13px/1.7 ui-monospace,Menlo,monospace}
+.tree details{margin-left:16px}.tree summary{cursor:pointer}
+.tree .f{margin-left:32px}
+.tree em{color:var(--mute);font-style:normal;font-family:system-ui;margin-left:8px}
+.evt{display:inline-block;padding:2px 8px;border-radius:6px;border:1px solid var(--line);font:12.5px ui-monospace,monospace;margin:2px}
+.lane{display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;margin:6px 0}
+.lane>span{color:var(--mute);font-size:13px}
+.bar{height:26px;border-radius:6px;background:var(--line);position:relative;overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;background:var(--c);opacity:.85;transition:all .3s}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--mute);margin-bottom:12px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--c);margin-right:5px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Voicebox: project map</h1>
+  <p>A local-first voice studio. It makes speech (TTS), writes down speech (STT), and gives voice to agents. This custom build (<code>0.6.0-custom.1</code>) adds real-time streaming TTS, streaming STT, and LiveKit plugins. Click the items on each tab.</p>
+</header>
+<nav><div role="tablist" id="tabs"></div></nav>
+<main>
+
+<section id="arch">
+  <div class="legend">
+    <span style="--c:var(--ui)"><i></i>Frontend</span><span style="--c:var(--nat)"><i></i>Native (Rust)</span>
+    <span style="--c:var(--api)"><i></i>HTTP / WS layer</span><span style="--c:var(--eng)"><i></i>Inference</span>
+    <span style="--c:var(--data)"><i></i>Storage</span><span style="--c:var(--ext)"><i></i>External client</span>
+  </div>
+  <div class="grid">
+    <div id="map"></div>
+    <aside class="card" id="detail" aria-live="polite"></aside>
+  </div>
+</section>
+
+<section id="flows">
+  <div class="ctl" id="flowbtns"></div>
+  <div class="card"><div class="steps" id="steps"></div></div>
+</section>
+
+<section id="engines">
+  <div class="ctl" id="kindbtns"></div>
+  <input type="search" id="q" placeholder="Filter by name, language, feature">
+  <div class="card tw"><table><thead><tr><th>Model</th><th>Kind</th><th>Notes</th><th>Source file</th></tr></thead><tbody id="etb"></tbody></table></div>
+</section>
+
+<section id="stream">
+  <div class="card">
+    <h2 style="margin-top:0">Streaming STT: how the 3 adapters differ</h2>
+    <p style="color:var(--mute)">Audio frames arrive over <code>WS /stt/ws</code>. A Silero VAD cuts the audio into segments. The adapter for the chosen model makes the text. Pick an adapter.</p>
+    <div class="ctl" id="adbtns"></div>
+    <div id="adinfo"></div>
+    <div style="margin-top:14px">
+      <div class="lane" style="--c:var(--ext)"><span>Speech</span><div class="bar"><i style="left:8%;width:60%"></i></div></div>
+      <div class="lane" style="--c:var(--eng)"><span>Interim text</span><div class="bar" id="b_int"><i></i></div></div>
+      <div class="lane" style="--c:var(--ui)"><span>Final text</span><div class="bar" id="b_fin"><i></i></div></div>
+    </div>
+    <p style="margin-bottom:4px"><b>Events sent to the client</b></p>
+    <div><span class="evt">ready</span><span class="evt">speech_start</span><span class="evt">interim</span><span class="evt">final</span><span class="evt">speech_end</span><span class="evt">error</span></div>
+    <p style="color:var(--mute);font-size:13.5px">The <code>text</code> field is always the full segment text. The client replaces; it never appends. <code>stable_text</code> is the part that will not change.</p>
+  </div>
+</section>
+
+<section id="files">
+  <div class="card tree" id="tree"></div>
+</section>
+
+<section id="run">
+  <div class="card">
+    <h2 style="margin-top:0">Run it</h2>
+    <p style="color:var(--mute)">Commands come from <code>package.json</code>, <code>justfile</code> and the READMEs.</p>
+    <div class="tw"><table><thead><tr><th>Goal</th><th>Command</th></tr></thead><tbody>
+      <tr><td>Set up all dependencies</td><td><code>just setup</code></td></tr>
+      <tr><td>Start the desktop app (dev)</td><td><code>just dev</code> or <code>bun run dev</code></td></tr>
+      <tr><td>Start only the Python server</td><td><code>bun run dev:server</code> (port 17493)</td></tr>
+      <tr><td>Start the web build</td><td><code>bun run dev:web</code></td></tr>
+      <tr><td>Open the API docs</td><td><code>http://127.0.0.1:17493/docs</code></td></tr>
+      <tr><td>Check types and lint</td><td><code>bun run typecheck</code>, <code>bun run check</code></td></tr>
+      <tr><td>Regenerate the API client</td><td><code>bun run generate:api</code></td></tr>
+      <tr><td>Run the LiveKit example agent</td><td><code>cd integrations/livekit && uv run python examples/voice_agent.py console</code></td></tr>
+      <tr><td>Backend tests</td><td>files in <code>backend/tests/</code> (pytest)</td></tr>
+    </tbody></table></div>
+  </div>
+</section>
+
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const el=(t,a={},h='')=>{const e=document.createElement(t);Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));e.innerHTML=h;return e};
+
+/* ---------- Architecture ---------- */
+const NODES={
+ app:{c:'ui',layer:'Clients',t:'React app',s:'app/src',d:'The UI. TypeScript, Tailwind, Zustand for state, React Query for server data. The same code runs in the Tauri window and in the web build.',
+  li:['Tabs: Voices, Generate, Stories, Effects, Captures, Audio, Models, Server settings','Typed API client in <code>app/src/lib/api</code> (generated by <code>bun run generate:api</code>)','<code>platform/</code> is an interface; Tauri and web each give an implementation']},
+ tauri:{c:'nat',layer:'Clients',t:'Tauri shell',s:'tauri/src-tauri',d:'The native desktop wrapper in Rust. It starts the Python server as a sidecar and does the work that a browser cannot do.',
+  li:['Global hotkey monitor and chord keys','Paste injection with clipboard save and restore (macOS)','Accessibility and Input Monitoring permission checks','Audio capture and output, the floating pill overlay']},
+ web:{c:'ui',layer:'Clients',t:'Web build',s:'web/src',d:'A browser host for the same React app. It gives web versions of the platform interface (audio, filesystem, updater).',li:[]},
+ agent:{c:'ext',layer:'Clients',t:'Agents and scripts',s:'MCP, /speak, LiveKit',d:'External programs. An MCP-aware agent (Claude Code, Cursor) calls tools. A script calls <code>POST /speak</code>. A LiveKit agent uses the plugins.',
+  li:['MCP over HTTP at <code>/mcp</code>, or the stdio shim <code>voicebox-mcp</code>','LiveKit plugins <code>VoiceboxSTT</code> and <code>VoiceboxTTS</code> in <code>integrations/livekit</code>']},
+ routes:{c:'api',layer:'Python server (FastAPI, port 17493)',t:'routes/',s:'25 routers',d:'Thin HTTP handlers. They check input, call a service, and format the reply. They are registered in <code>routes/__init__.py</code>.',
+  li:['REST: profiles, generations, history, stories, effects, captures, models, settings, channels, cloud','<code>speak.py</code>: POST /speak','<code>tts_stream.py</code>: POST /tts/stream, WS /tts/ws','<code>stt_stream.py</code>: WS /stt/ws','<code>openai_compat.py</code>: OpenAI-style API','<code>events.py</code>: server-sent events for status']},
+ mcp:{c:'api',layer:'Python server (FastAPI, port 17493)',t:'mcp_server/',s:'FastMCP at /mcp',d:'Model Context Protocol server mounted in the same app. It identifies each client with the <code>X-Voicebox-Client-Id</code> header, so each agent can have its own voice.',
+  li:['<code>voicebox_speak</code> (optional <code>personality: true</code>)','<code>voicebox_transcribe</code>','<code>voicebox_list_captures</code>','<code>voicebox_list_profiles</code>']},
+ services:{c:'api',layer:'Python server (FastAPI, port 17493)',t:'services/',s:'business logic',d:'All real logic lives here. Routes stay thin.',
+  li:['<code>generation.py</code>: one <code>run_generation()</code> for generate, retry and regenerate (chunking, crossfade, effects, versions)','<code>task_queue.py</code>: serial queue, 1 GPU job at a time','<code>profiles</code>, <code>stories</code>, <code>captures</code>, <code>effects</code>, <code>export_import</code>','<code>refinement</code>, <code>personality</code>, <code>llm</code>: the local LLM paths','<code>transcribe.py</code>: batch STT']},
+ backends:{c:'eng',layer:'Inference',t:'backends/',s:'engines + registry',d:'<code>backends/__init__.py</code> holds the protocols (<code>TTSBackend</code>, <code>STTBackend</code>) and a registry of <code>ModelConfig</code> entries. To add an engine: implement the protocol and add a config.',
+  li:['MLX variants for Apple Silicon, PyTorch for CUDA, ROCm, XPU, DirectML, CPU','<code>stt_streaming.py</code>: stream interface, VAD, adapters','<code>qwen_asr_streaming.py</code>, <code>voxtral_streaming.py</code>: model adapters','All MLX work runs on one shared thread (see commit 1ed9a69)']},
+ utils:{c:'eng',layer:'Inference',t:'utils/',s:'audio, effects, cache',d:'Helpers: audio I/O, Pedalboard effects, chunked TTS, platform detection, HuggingFace offline patch and progress tracking, API key check for external access.',li:[]},
+ db:{c:'data',layer:'Storage',t:'SQLite',s:'database/',d:'SQLAlchemy models, auto-migrations on start, seed data.',
+  li:['VoiceProfile, ProfileSample','Generation, GenerationVersion','Story, StoryItem, Project','EffectPreset, AudioChannel (+ mappings)','CaptureSettings, GenerationSettings, CloudSettings','MCPClientBinding, Capture']},
+ hf:{c:'data',layer:'Storage',t:'Model files + audio',s:'HF cache, data dir',d:'Models download from HuggingFace on first use. Generated audio, captures and profile samples stay in the local data directory. Nothing leaves the machine.',li:[]},
+};
+const LAYERS=['Clients','Python server (FastAPI, port 17493)','Inference','Storage'];
+function buildMap(){
+  const m=$('#map');
+  LAYERS.forEach((L,i)=>{
+    const d=el('div',{class:'layer'},`<h3>${L}</h3>`);const n=el('div',{class:'nodes'});
+    Object.entries(NODES).filter(([,v])=>v.layer===L).forEach(([k,v])=>{
+      const b=el('button',{class:'node','data-k':k,style:`--c:var(--${v.c})`,'aria-pressed':'false'},`${v.t}<small>${v.s}</small>`);
+      b.onclick=()=>pick(k);n.appendChild(b)});
+    d.appendChild(n);m.appendChild(d);
+    if(i<LAYERS.length-1)m.appendChild(el('div',{class:'arrow'},'↓ calls'));
+  });
+  pick('routes');
+}
+function pick(k){
+  document.querySelectorAll('.node').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===k));
+  const v=NODES[k];
+  $('#detail').innerHTML=`<h2>${v.t}</h2><span class="tag">${v.layer}</span><p>${v.d}</p>${v.li.length?'<ul>'+v.li.map(x=>`<li>${x}</li>`).join('')+'</ul>':''}`;
+}
+
+/* ---------- Flows ---------- */
+const FLOWS={
+ 'Generate speech':[
+  ['React app','User picks a voice profile, engine and text. The client sends <code>POST /generate</code>.'],
+  ['routes/generations.py','Validates the request, creates a Generation row with status "queued", returns at once.'],
+  ['services/task_queue.py','Puts the job in the serial queue. Only 1 GPU job runs at a time.'],
+  ['services/generation.py','<code>run_generation()</code> loads the model, builds the voice prompt, splits long text at sentence ends, and generates each chunk.'],
+  ['backends/*','The chosen engine (MLX or PyTorch) makes audio. Chunks are crossfaded.'],
+  ['utils/effects.py','Optional effects chain (Pedalboard) makes an extra version. The original stays.'],
+  ['Storage + SSE','The file and a GenerationVersion row are saved. Status goes to the UI over server-sent events.']],
+ 'Dictation':[
+  ['Tauri hotkey monitor','User holds a chord key. Rust code starts audio capture. The pill shows "recording".'],
+  ['Key release','Audio goes to <code>POST /transcribe</code> (or the Captures API). The pill shows "transcribing".'],
+  ['services/transcribe.py','Whisper or Qwen3-ASR (MLX or PyTorch) makes the transcript.'],
+  ['services/refinement.py','Optional: the local Qwen3 LLM removes ums and false starts. The pill shows "refining".'],
+  ['Tauri paste','Rust code checks the focused field with the Accessibility API, saves the clipboard, pastes the text, restores the clipboard.'],
+  ['Captures','Audio and transcript are stored as a Capture. User can replay, re-transcribe, or turn it into a voice sample.']],
+ 'Agent speaks (MCP)':[
+  ['Agent','Calls <code>voicebox_speak(text, profile?, personality?)</code> at <code>/mcp</code>, with the <code>X-Voicebox-Client-Id</code> header.'],
+  ['mcp_server/context.py','Middleware reads the client id and records <code>last_seen_at</code>.'],
+  ['Voice selection','Order: explicit argument, then the binding of this client (Settings → MCP), then the default playback voice.'],
+  ['services/personality.py','If <code>personality: true</code>, the local LLM rewrites the text in the voice persona.'],
+  ['Generation + pill','The normal generation path runs. The pill shows "speaking" with the profile name. <code>POST /speak</code> uses the same path.']],
+ 'Streaming TTS':[
+  ['Client','Opens <code>WS /tts/ws</code> (or <code>POST /tts/stream</code>). Local loopback needs no key; external access needs an API key.'],
+  ['routes/tts_stream.py','Warm-up (<code>/tts/warmup</code>) and a cached voice reference keep the first chunk fast.'],
+  ['backends/mlx_icl_stream.py','The engine yields small audio chunks while it generates.'],
+  ['Client','Audio plays as the chunks arrive. If the client closes the socket (barge-in), the server stops the generation.']],
+ 'Voice agent (LiveKit)':[
+  ['Mic → LiveKit agent','The agent gets audio frames. <code>VoiceboxSTT</code> resamples to 16 kHz and sends them on <code>WS /stt/ws</code>.'],
+  ['Silero VAD + adapter','The server cuts segments and sends <code>interim</code> and <code>final</code> text.'],
+  ['LLM (e.g. Ollama)','The agent turns the final text into a reply.'],
+  ['VoiceboxTTS','Streams the reply on <code>WS /tts/ws</code> in a cloned voice.'],
+  ['Barge-in','If the user speaks over the reply, the session closes the TTS socket and the server stops.']],
+};
+let flow='Generate speech',fstep=0;
+function drawFlow(){
+  const bs=$('#flowbtns');bs.innerHTML='';
+  Object.keys(FLOWS).forEach(k=>{const b=el('button',{class:'btn','aria-pressed':k===flow},k);b.onclick=()=>{flow=k;fstep=0;drawFlow()};bs.appendChild(b)});
+  const n=el('button',{class:'btn'},'Next step →');n.onclick=()=>{fstep=(fstep+1)%FLOWS[flow].length;drawFlow()};bs.appendChild(n);
+  const s=$('#steps');s.innerHTML='';
+  FLOWS[flow].forEach(([a,b],i)=>{const d=el('div',{class:'step'+(i===fstep?' on':'')},`<div class="n">${i+1}</div><div><b>${a}</b><span>${b}</span></div>`);d.onclick=()=>{fstep=i;drawFlow()};s.appendChild(d)});
+}
+
+/* ---------- Engines ---------- */
+const MODELS=[
+ ['qwen-tts 0.6B / 1.7B','TTS','Voice cloning, 10 languages, delivery instructions','mlx_backend.py, pytorch_backend.py'],
+ ['qwen-custom-voice','TTS','9 preset voices, instruction control, no reference audio','qwen_custom_voice_backend.py'],
+ ['qwen-voice-design','TTS','Voice from a text description','qwen_voice_design_backend.py'],
+ ['luxtts','TTS','English, light (~1 GB), 48 kHz','luxtts_backend.py'],
+ ['chatterbox-tts','TTS','23 languages, MLX variant exists','chatterbox_backend.py, chatterbox_mlx_backend.py'],
+ ['chatterbox-turbo','TTS','English, tags like [laugh] [sigh]','chatterbox_turbo_backend.py'],
+ ['tada 1B / 3B','TTS','HumeAI, long coherent audio','hume_backend.py'],
+ ['kokoro','TTS','50 preset voices, 82M, fast on CPU','kokoro_backend.py'],
+ ['omnivoice','TTS','Instruct-capable engine','omnivoice_backend.py'],
+ ['whisper base/small/medium/large/turbo','STT','Batch. Default for dictation. Segmented stream (final only)','pytorch_backend.py, mlx_backend.py'],
+ ['qwen-asr 0.6B / 1.7B','STT','Batch plus rolling stream with interim text (LocalAgreement-2)','qwen_asr_backend.py, qwen_asr_streaming.py'],
+ ['voxtral-realtime-4B','STT','Native stream, append-only text, delay_ms 80–2400','voxtral_realtime_backend.py, voxtral_streaming.py'],
+ ['qwen3 0.6B / 1.7B / 4B','LLM','Refinement and personality rewrite','qwen_llm_backend.py'],
+ ['openai-compatible','TTS','Calls an OpenAI-style remote API','openai_compat_backend.py'],
+];
+let kind='All';
+function drawEng(){
+  const kb=$('#kindbtns');kb.innerHTML='';
+  ['All','TTS','STT','LLM'].forEach(k=>{const b=el('button',{class:'btn','aria-pressed':k===kind},k);b.onclick=()=>{kind=k;drawEng()};kb.appendChild(b)});
+  const q=$('#q').value.toLowerCase();
+  $('#etb').innerHTML=MODELS.filter(m=>(kind==='All'||m[1]===kind)&&m.join(' ').toLowerCase().includes(q))
+   .map(m=>`<tr><td><b>${m[0]}</b></td><td>${m[1]}</td><td>${m[2]}</td><td><code>${m[3]}</code></td></tr>`).join('')||'<tr><td colspan=4>No match.</td></tr>';
+}
+$('#q').oninput=drawEng;
+
+/* ---------- Streaming adapters ---------- */
+const AD={
+ segmented:{n:'segmented (generic)',m:'Whisper and any batch model',d:'Buffers the segment. At the end it calls <code>transcribe()</code> once. Text comes only at the end.',caps:'interim: no · revises: no · native: no · needs VAD: yes',int:null},
+ rolling:{n:'rolling (Qwen3-ASR)',m:'qwen-asr-0.6B, qwen-asr-1.7B',d:'Encodes only the open 8 s window and reuses a KV cache for closed windows. Every 500 ms it decodes again. The common prefix of two decodes becomes <code>stable_text</code>. Measured step: 51–204 ms on M4 Max. First text after about 0.55 s. <code>finalize()</code> uses the batch path for the best text.',caps:'interim: yes · revises: yes · native: no · needs VAD: yes',int:[22,46]},
+ native:{n:'native (Voxtral Realtime)',m:'voxtral-realtime-4B',d:'A model built for streaming. It emits tokens as audio arrives, about 240 ms after the word. Text never changes (append-only). It keeps the GPU busy, so it competes with TTS; the VAD gives it audio only in open segments.',caps:'interim: yes · revises: no · native: yes · needs VAD: no',int:[14,58]},
+};
+let ad='rolling';
+function drawAd(){
+  const bs=$('#adbtns');bs.innerHTML='';
+  Object.entries(AD).forEach(([k,v])=>{const b=el('button',{class:'btn','aria-pressed':k===ad},v.n);b.onclick=()=>{ad=k;drawAd()};bs.appendChild(b)});
+  const v=AD[ad];
+  $('#adinfo').innerHTML=`<p><b>Models:</b> ${v.m}<br>${v.d}</p><p><code>${v.caps}</code></p>`;
+  const bi=$('#b_int i');
+  if(v.int){bi.style.left=v.int[0]+'%';bi.style.width=v.int[1]+'%';bi.style.display=''}else bi.style.display='none';
+  const fi=$('#b_fin i');fi.style.left='70%';fi.style.width='16%';
+}
+
+/* ---------- File tree ---------- */
+const TREE=[
+ ['backend/','Python FastAPI server',[
+  ['app.py','app factory, CORS, mounts /mcp and the frontend'],['main.py / server.py','entry point; Tauri sidecar launcher'],['models.py','Pydantic schemas'],['config.py','data paths'],
+  ['routes/','HTTP and WebSocket handlers'],['services/','business logic'],['backends/','TTS, STT, LLM engines and streaming adapters'],['database/','SQLAlchemy models, migrations, seed'],
+  ['mcp_server/','FastMCP tools'],['mcp_shim/','stdio bridge for MCP clients'],['utils/','audio, effects, platform detection'],['tests/','pytest suite']]],
+ ['app/src/','React UI',[['components/','tabs, generate box, stories, pill, settings'],['stores/','Zustand state'],['lib/api/','generated API client'],['lib/hooks/','data and recording hooks'],['platform/','host interface'],['i18n/','translations']]],
+ ['tauri/src-tauri/src/','Rust native layer',[['hotkey_monitor.rs','global chord keys'],['clipboard.rs, synthetic_keys.rs','paste injection'],['accessibility.rs, input_monitoring.rs','macOS permissions'],['audio_capture/, audio_output.rs','mic and speaker'],['focus_capture.rs','focused field info'],['speak_monitor.rs','pill for agent speech']]],
+ ['web/','browser host for the app',[]],
+ ['integrations/livekit/','Python package <code>voicebox_livekit</code>',[['voicebox_livekit/stt.py','VoiceboxSTT'],['examples/voice_agent.py','echo or Ollama agent'],['tests/','plugin tests']]],
+ ['docs-internal/','this file and STT research',[['research/stt-streaming-design.md','interface, adapters, protocol'],['research/stt-implementation-plan.md','phases and measurements'],['research/stt-investigation.md','state of STT before the work']]],
+ ['docs/, landing/','public docs site and landing page',[]],
+ ['scripts/, justfile, Dockerfile, docker-compose*.yml','build, release, containers',[]],
+];
+function drawTree(){
+  $('#tree').innerHTML=TREE.map(([a,b,c])=>c.length?`<details ${a==='backend/'?'open':''}><summary><b>${a}</b><em>${b}</em></summary>${c.map(([x,y])=>`<div class="f">${x}<em>${y}</em></div>`).join('')}</details>`:`<div style="margin-left:16px"><b>${a}</b><em>${b}</em></div>`).join('');
+}
+
+/* ---------- Tabs ---------- */
+const TABS=[['arch','Architecture'],['flows','How it works'],['engines','Models'],['stream','Streaming STT'],['files','Files'],['run','Run it']];
+const tb=$('#tabs');
+TABS.forEach(([id,t],i)=>{const b=el('button',{class:'tab',role:'tab','aria-selected':i===0},t);b.onclick=()=>show(id);b.dataset.id=id;tb.appendChild(b)});
+tb.appendChild(el('span',{class:'sp'}));
+const th=el('button',{class:'btn'},'Theme');th.onclick=()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;r.dataset.theme=dark?'light':'dark'};tb.appendChild(th);
+function show(id){
+  document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('on',s.id===id));
+  document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.id===id));
+  try{location.hash=id}catch(e){}
+}
+buildMap();drawFlow();drawEng();drawAd();drawTree();
+show(TABS.some(t=>'#'+t[0]===location.hash)?location.hash.slice(1):'arch');
+</script>
+</body>
+</html>

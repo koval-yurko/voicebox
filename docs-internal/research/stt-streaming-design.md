@@ -1,7 +1,7 @@
 # Streaming STT: generic interface and per-model adapters
 
 Date: 2026-10-28. Base commit: `3abe9e1`. Status: design proposal, no code yet.
-Context: `docs/research/stt-investigation.md` (current STT state, sections 7 and 8).
+Context: `docs-internal/research/stt-investigation.md` (current STT state, sections 7 and 8).
 Target: Apple Silicon Mac, MLX, LiveKit agent on the same Mac.
 
 ## 1. Problem
