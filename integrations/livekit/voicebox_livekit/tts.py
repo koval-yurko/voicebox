@@ -29,7 +29,7 @@ from ._common import ensure_ws_url
 
 logger = logging.getLogger("voicebox_livekit.tts")
 
-DEFAULT_BASE_URL = "http://127.0.0.1:17493"
+DEFAULT_BASE_URL = "http://127.0.0.1:17593"
 DEFAULT_SAMPLE_RATE = 24000  # Qwen TTS; the real rate comes from the server "ready" message
 
 

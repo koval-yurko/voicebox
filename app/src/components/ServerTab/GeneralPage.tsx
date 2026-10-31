@@ -126,7 +126,7 @@ export function GeneralPage() {
                 render={({ field }) => (
                   <FormItem className="flex-1">
                     <FormControl>
-                      <Input placeholder="http://127.0.0.1:17493" {...field} />
+                      <Input placeholder="http://127.0.0.1:17593" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

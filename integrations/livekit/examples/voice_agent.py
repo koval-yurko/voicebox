@@ -5,7 +5,7 @@
     uv run python examples/voice_agent.py dev          # join rooms of LIVEKIT_URL
 
 Environment (all optional):
-    VOICEBOX_URL         Voicebox server for STT and TTS (default http://127.0.0.1:17493)
+    VOICEBOX_URL         Voicebox server for STT and TTS (default http://127.0.0.1:17593)
     VOICEBOX_STT_URL     STT server, if it differs from VOICEBOX_URL
     VOICEBOX_STT_MODEL   default qwen-asr-0.6B
     VOICEBOX_PROFILE_ID  TTS voice profile (default: the first profile of the server)
@@ -29,7 +29,7 @@ from voicebox_livekit import VoiceboxSTT, VoiceboxTTS
 load_dotenv()
 logger = logging.getLogger("voicebox-agent")
 
-VOICEBOX_URL = os.getenv("VOICEBOX_URL", "http://127.0.0.1:17493")
+VOICEBOX_URL = os.getenv("VOICEBOX_URL", "http://127.0.0.1:17593")
 STT_URL = os.getenv("VOICEBOX_STT_URL", VOICEBOX_URL)
 STT_MODEL = os.getenv("VOICEBOX_STT_MODEL", "qwen-asr-0.6B")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")

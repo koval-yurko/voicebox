@@ -5,7 +5,7 @@ JSON-RPC message to ``http://127.0.0.1:<port>/mcp/``, and stream the
 server's response back. The Voicebox server does all the real work.
 
 Environment variables:
-  VOICEBOX_PORT       Voicebox server port (default 17493).
+  VOICEBOX_PORT       Voicebox server port (default 17593).
   VOICEBOX_HOST       Host (default 127.0.0.1).
   VOICEBOX_CLIENT_ID  Forwarded as X-Voicebox-Client-Id on every request.
 
@@ -27,7 +27,7 @@ import httpx
 CLIENT_ID_HEADER = "X-Voicebox-Client-Id"
 SESSION_HEADER = "mcp-session-id"
 HEALTH_TIMEOUT_S = 30.0
-DEFAULT_PORT = 17493
+DEFAULT_PORT = 17593
 
 
 def _err(msg: str) -> None:

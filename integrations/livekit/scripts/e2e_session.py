@@ -9,7 +9,7 @@ VoiceboxTTS and Silero VAD, so all audio goes through the real Voicebox servers.
    Check: the agent speech stops (interrupted), the time it took, and a FINAL
    transcript of sentence 2.
 
-    uv run python scripts/e2e_session.py --stt-port 17499 --tts-port 17493 path/to/speech_pause_speech_16k.wav
+    uv run python scripts/e2e_session.py --stt-port 17499 --tts-port 17593 path/to/speech_pause_speech_16k.wav
 """
 
 from __future__ import annotations
@@ -121,8 +121,8 @@ async def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("wav", help="16 kHz mono WAV: sentence, pause, sentence")
     p.add_argument("--split-s", type=float, default=4.0, help="time inside the pause between the 2 sentences")
-    p.add_argument("--stt-port", type=int, default=17493)
-    p.add_argument("--tts-port", type=int, default=17493)
+    p.add_argument("--stt-port", type=int, default=17593)
+    p.add_argument("--tts-port", type=int, default=17593)
     p.add_argument("--model", default="qwen-asr-0.6B")
     p.add_argument("--profile-id")
     p.add_argument("--debug", action="store_true", help="log the plugin WebSocket traffic")

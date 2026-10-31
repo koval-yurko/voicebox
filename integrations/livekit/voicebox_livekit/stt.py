@@ -35,7 +35,7 @@ from ._common import ensure_ws_url
 logger = logging.getLogger("voicebox_livekit.stt")
 
 STT_SAMPLE_RATE = 16000  # the server works at 16 kHz; sending it avoids a second resample
-DEFAULT_BASE_URL = "http://127.0.0.1:17493"
+DEFAULT_BASE_URL = "http://127.0.0.1:17593"
 
 
 @dataclass

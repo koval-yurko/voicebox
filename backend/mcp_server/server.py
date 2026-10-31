@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 def build_mcp_server() -> FastMCP:
     """Create the FastMCP instance with Voicebox tools registered."""
     mcp = FastMCP(
-        name="voicebox",
+        name="voicebox-yk",
         instructions=(
             "Voicebox is a local voice I/O layer. Use `voicebox_speak` to "
             "play text in a voice profile, `voicebox_transcribe` for "

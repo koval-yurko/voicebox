@@ -177,7 +177,7 @@ def score(
 # ── Runner ────────────────────────────────────────────────────────────
 
 
-DEFAULT_PORTS = (8000, 8765, 8899, 17493)
+DEFAULT_PORTS = (8000, 8765, 8899, 17593)
 THROWAWAY_PROFILE_PREFIX = "personality-harness-"
 KOKORO_PROBE_VOICE = "af_heart"
 """Any valid kokoro voice id works — compose never calls into TTS, it

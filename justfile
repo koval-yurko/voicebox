@@ -203,11 +203,11 @@ dev: _ensure-venv _ensure-sidecar
     set -euo pipefail
 
     backend_pid=""
-    if curl -sf http://127.0.0.1:17493/health > /dev/null 2>&1; then
-        echo "Backend already running on http://localhost:17493"
+    if curl -sf http://127.0.0.1:17593/health > /dev/null 2>&1; then
+        echo "Backend already running on http://localhost:17593"
     else
-        echo "Starting backend on http://localhost:17493 ..."
-        {{ venv_bin }}/uvicorn backend.main:app --reload --port 17493 &
+        echo "Starting backend on http://localhost:17593 ..."
+        {{ venv_bin }}/uvicorn backend.main:app --reload --port 17593 &
         backend_pid=$!
         sleep 2
     fi
@@ -220,9 +220,9 @@ dev: _ensure-venv _ensure-sidecar
 [windows]
 dev: _ensure-venv _ensure-sidecar
     $backendJob = $null; \
-    try { $null = Invoke-WebRequest -Uri "http://127.0.0.1:17493/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; Write-Host "Backend already running on http://localhost:17493" } catch { \
-        Write-Host "Starting backend on http://localhost:17493 ..."; \
-        $backendJob = Start-Process -PassThru -NoNewWindow -FilePath "{{ python }}" -ArgumentList "-m","uvicorn","backend.main:app","--reload","--port","17493"; \
+    try { $null = Invoke-WebRequest -Uri "http://127.0.0.1:17593/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; Write-Host "Backend already running on http://localhost:17593" } catch { \
+        Write-Host "Starting backend on http://localhost:17593 ..."; \
+        $backendJob = Start-Process -PassThru -NoNewWindow -FilePath "{{ python }}" -ArgumentList "-m","uvicorn","backend.main:app","--reload","--port","17593"; \
         Start-Sleep -Seconds 2; \
     }; \
     Write-Host "Starting Tauri desktop app..."; \
@@ -231,11 +231,11 @@ dev: _ensure-venv _ensure-sidecar
 # Start backend only
 [unix]
 dev-backend: _ensure-venv
-    {{ venv_bin }}/uvicorn backend.main:app --reload --port 17493
+    {{ venv_bin }}/uvicorn backend.main:app --reload --port 17593
 
 [windows]
 dev-backend: _ensure-venv
-    & "{{ python }}" -m uvicorn backend.main:app --reload --port 17493
+    & "{{ python }}" -m uvicorn backend.main:app --reload --port 17593
 
 # Start Tauri desktop app only (backend must be running separately)
 [unix]
@@ -253,11 +253,11 @@ dev-web: _ensure-venv
     set -euo pipefail
 
     backend_pid=""
-    if curl -sf http://127.0.0.1:17493/health > /dev/null 2>&1; then
-        echo "Backend already running on http://localhost:17493"
+    if curl -sf http://127.0.0.1:17593/health > /dev/null 2>&1; then
+        echo "Backend already running on http://localhost:17593"
     else
-        echo "Starting backend on http://localhost:17493 ..."
-        {{ venv_bin }}/uvicorn backend.main:app --reload --port 17493 &
+        echo "Starting backend on http://localhost:17593 ..."
+        {{ venv_bin }}/uvicorn backend.main:app --reload --port 17593 &
         backend_pid=$!
         sleep 2
     fi
@@ -269,9 +269,9 @@ dev-web: _ensure-venv
 [windows]
 dev-web: _ensure-venv
     $backendJob = $null; \
-    try { $null = Invoke-WebRequest -Uri "http://127.0.0.1:17493/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; Write-Host "Backend already running on http://localhost:17493" } catch { \
-        Write-Host "Starting backend on http://localhost:17493 ..."; \
-        $backendJob = Start-Process -PassThru -NoNewWindow -FilePath "{{ python }}" -ArgumentList "-m","uvicorn","backend.main:app","--reload","--port","17493"; \
+    try { $null = Invoke-WebRequest -Uri "http://127.0.0.1:17593/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; Write-Host "Backend already running on http://localhost:17593" } catch { \
+        Write-Host "Starting backend on http://localhost:17593 ..."; \
+        $backendJob = Start-Process -PassThru -NoNewWindow -FilePath "{{ python }}" -ArgumentList "-m","uvicorn","backend.main:app","--reload","--port","17593"; \
         Start-Sleep -Seconds 2; \
     }; \
     Write-Host "Starting web app..."; \
@@ -318,10 +318,10 @@ build-server: _ensure-venv
 [linux]
 build-server-cuda: _ensure-venv
     PATH="{{ venv_bin }}:$PATH" {{ python }} backend/build_binary.py --cuda
-    rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/sh.voicebox.app/backends/cuda"
-    mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/sh.voicebox.app/backends/cuda"
-    cp -a backend/dist/voicebox-server-cuda/. "${XDG_DATA_HOME:-$HOME/.local/share}/sh.voicebox.app/backends/cuda/"
-    chmod +x "${XDG_DATA_HOME:-$HOME/.local/share}/sh.voicebox.app/backends/cuda/voicebox-server-cuda"
+    rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/com.koval-yurko.voicebox-yk/backends/cuda"
+    mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/com.koval-yurko.voicebox-yk/backends/cuda"
+    cp -a backend/dist/voicebox-server-cuda/. "${XDG_DATA_HOME:-$HOME/.local/share}/com.koval-yurko.voicebox-yk/backends/cuda/"
+    chmod +x "${XDG_DATA_HOME:-$HOME/.local/share}/com.koval-yurko.voicebox-yk/backends/cuda/voicebox-server-cuda"
 
 # Build CUDA server binary and place in app data dir for local testing
 [windows]
@@ -330,7 +330,7 @@ build-server-cuda: _ensure-venv
     $env:PATH = "{{ venv_bin }};$env:PATH"; \
     & "{{ python }}" backend/build_binary.py --cuda; \
     if ($LASTEXITCODE -ne 0) { throw "build_binary.py --cuda failed with exit code $LASTEXITCODE" }; \
-    $dest = "$env:APPDATA/sh.voicebox.app/backends/cuda"; \
+    $dest = "$env:APPDATA/com.koval-yurko.voicebox-yk/backends/cuda"; \
     if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }; \
     New-Item -ItemType Directory -Path $dest -Force | Out-Null; \
     Copy-Item "backend/dist/voicebox-server-cuda/*" $dest -Recurse -Force; \
@@ -343,7 +343,13 @@ build-local: build-server build-server-cuda build-tauri
 # Build Tauri desktop app
 [unix]
 build-tauri:
-    cd {{ tauri_dir }} && bun run tauri build
+    # Sign updater artifacts with the local key (password in the macOS keychain) unless CI set one.
+    cd {{ tauri_dir }} && \
+    if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ] && [ -f "$HOME/.tauri/voicebox-yk.key" ]; then \
+        export TAURI_SIGNING_PRIVATE_KEY="$HOME/.tauri/voicebox-yk.key"; \
+        export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(security find-generic-password -s voicebox-yk-tauri-signing -w)"; \
+    fi; \
+    bun run tauri build
 
 [windows]
 build-tauri:
@@ -450,11 +456,11 @@ generate-api:
 # Open API docs in browser
 [unix]
 docs:
-    open http://localhost:17493/docs 2>/dev/null || xdg-open http://localhost:17493/docs
+    open http://localhost:17593/docs 2>/dev/null || xdg-open http://localhost:17593/docs
 
 [windows]
 docs:
-    Start-Process "http://localhost:17493/docs"
+    Start-Process "http://localhost:17593/docs"
 
 # Tail backend logs
 [unix]

@@ -3,7 +3,7 @@
 
 Usage:
   backend/venv/bin/python scripts/tts_stream_test.py --profile <id> [--mode http|ws|both]
-      [--url http://127.0.0.1:17493] [--api-key KEY] [--interval-ms 320] [--model-size 1.7B] [--out /tmp/tts]
+      [--url http://127.0.0.1:17593] [--api-key KEY] [--interval-ms 320] [--model-size 1.7B] [--out /tmp/tts]
 
 --url may be an https:// address (for example a Cloudflare Tunnel hostname);
 --api-key is sent as "Authorization: Bearer KEY" on both routes.
@@ -116,7 +116,7 @@ async def run_ws(args):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--profile", required=True)
-    p.add_argument("--url", default="http://127.0.0.1:17493")
+    p.add_argument("--url", default="http://127.0.0.1:17593")
     p.add_argument("--api-key", default=None)
     p.add_argument("--mode", choices=["http", "ws", "both"], default="both")
     p.add_argument("--interval-ms", type=int, default=320)

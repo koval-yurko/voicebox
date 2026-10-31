@@ -18,17 +18,17 @@ import { SettingRow, SettingSection } from './SettingRow';
 
 function getStdioShimCommand(): string {
   if (typeof navigator === 'undefined') {
-    return '/Applications/Voicebox.app/Contents/MacOS/voicebox-mcp';
+    return '/Applications/Voicebox YK.app/Contents/MacOS/voicebox-mcp';
   }
 
   const platform = `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
   if (platform.includes('win')) {
-    return 'C:\\Program Files\\Voicebox\\voicebox-mcp.exe';
+    return 'C:\\Program Files\\Voicebox YK\\voicebox-mcp.exe';
   }
   if (platform.includes('linux')) {
     return '/opt/voicebox/voicebox-mcp';
   }
-  return '/Applications/Voicebox.app/Contents/MacOS/voicebox-mcp';
+  return '/Applications/Voicebox YK.app/Contents/MacOS/voicebox-mcp';
 }
 
 /**
@@ -82,7 +82,7 @@ export function MCPPage() {
             snippet={JSON.stringify(
               {
                 mcpServers: {
-                  voicebox: {
+                  'voicebox-yk': {
                     url: mcpUrl,
                     headers: { 'X-Voicebox-Client-Id': 'claude-code' },
                   },
@@ -95,7 +95,7 @@ export function MCPPage() {
           <SnippetRow
             title={t('settings.mcp.install.claudeCode.title')}
             description={t('settings.mcp.install.claudeCode.description')}
-            snippet={`claude mcp add voicebox --transport http --url ${mcpUrl} --header "X-Voicebox-Client-Id: claude-code"`}
+            snippet={`claude mcp add voicebox-yk --transport http --url ${mcpUrl} --header "X-Voicebox-Client-Id: claude-code"`}
           />
           <SnippetRow
             title={t('settings.mcp.install.stdio.title')}
@@ -103,7 +103,7 @@ export function MCPPage() {
             snippet={JSON.stringify(
               {
                 mcpServers: {
-                  voicebox: {
+                  'voicebox-yk': {
                     command: stdioShimCommand,
                     env: { VOICEBOX_CLIENT_ID: 'claude-code' },
                   },

@@ -3,7 +3,7 @@
 The audio goes in as 20 ms frames at --input-rate (48 kHz like a LiveKit room),
 in real time, so the plugin resampler and the server VAD see live-like input.
 
-    uv run python scripts/smoke_stt.py --port 17493 path/to/speech.wav
+    uv run python scripts/smoke_stt.py --port 17593 path/to/speech.wav
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def read_wav(path: str, rate: int) -> list[rtc.AudioFrame]:
 async def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("wav")
-    p.add_argument("--port", type=int, default=17493)
+    p.add_argument("--port", type=int, default=17593)
     p.add_argument("--model", default="qwen-asr-0.6B")
     p.add_argument("--language", default="en")
     p.add_argument("--input-rate", type=int, default=48000)

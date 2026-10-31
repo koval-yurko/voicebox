@@ -15,7 +15,7 @@ Usage:
     python backend/tests/test_refinement_samples.py
 
     # Hit a non-default port (auto-detected via /health probe when omitted):
-    python backend/tests/test_refinement_samples.py --port 17493
+    python backend/tests/test_refinement_samples.py --port 17593
 
     # Only test one model size:
     python backend/tests/test_refinement_samples.py --model 4B
@@ -316,7 +316,7 @@ def score(sample: Sample, model: str, refined: str, latency_ms: int) -> Scorecar
 # ── Runner ────────────────────────────────────────────────────────────
 
 
-DEFAULT_PORTS = (8000, 8765, 8899, 17493)
+DEFAULT_PORTS = (8000, 8765, 8899, 17593)
 
 
 def detect_backend_port(hint: Optional[int]) -> int:
