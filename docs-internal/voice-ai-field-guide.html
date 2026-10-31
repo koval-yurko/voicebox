@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice AI Field Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky side nav + one scrolling column of sections; each section holds one small live widget. */
+:root{
+  --bg:#F2F5F8; --panel:#FFFFFF; --panel2:#E8EDF2; --fg:#14202B; --muted:#526272; --line:#D3DBE3;
+  --tts:#7A4DD8; --stt:#0E8A7D; --llm:#B86A00; --warn:#C2362B; --ok:#1E8E4E;
+  --tts-bg:#EFE9FB; --stt-bg:#DDF2EF; --llm-bg:#F8EBD6; --code:#101A24; --codefg:#D6E2EE;
+  --display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif; --body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E151C; --panel:#16202A; --panel2:#1E2B37; --fg:#E4ECF3; --muted:#93A5B6; --line:#2A3947;
+  --tts:#B79BFF; --stt:#4FD1C0; --llm:#F0A94A; --warn:#FF8479; --ok:#5BD08A;
+  --tts-bg:#2A2144; --stt-bg:#12332F; --llm-bg:#3A2A10; --code:#0A1118; --codefg:#D6E2EE; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E151C; --panel:#16202A; --panel2:#1E2B37; --fg:#E4ECF3; --muted:#93A5B6; --line:#2A3947;
+  --tts:#B79BFF; --stt:#4FD1C0; --llm:#F0A94A; --warn:#FF8479; --ok:#5BD08A;
+  --tts-bg:#2A2144; --stt-bg:#12332F; --llm-bg:#3A2A10; --code:#0A1118; --codefg:#D6E2EE; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.6 var(--body);padding-block:0}
+.shell{display:grid;grid-template-columns:230px minmax(0,1fr);gap:40px;max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+nav{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:28px 0}
+nav .brand{font:800 22px/1.1 var(--display);margin-bottom:6px}
+nav .sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+nav a{display:block;padding:6px 10px;border-left:2px solid var(--line);color:var(--muted);text-decoration:none;font-size:14px}
+nav a:hover,nav a.on{color:var(--fg);border-left-color:var(--fg);background:var(--panel2)}
+main{padding:28px 0 90px;min-width:0}
+section{padding:34px 0;border-top:1px solid var(--line)}
+section:first-of-type{border-top:0}
+h1{font:800 clamp(34px,5vw,54px)/1.04 var(--display);margin:0 0 14px;text-wrap:balance}
+h2{font:700 clamp(25px,3vw,32px)/1.15 var(--display);margin:0 0 6px;text-wrap:balance}
+h3{font:600 17px/1.3 var(--body);margin:22px 0 6px}
+p{max-width:68ch;margin:8px 0}
+.lede{font-size:18px;color:var(--muted);max-width:60ch}
+.kicker{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+code,.mono{font-family:var(--mono);font-size:.9em}
+p code,li code,td code{background:var(--panel2);padding:1px 5px;border-radius:4px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin:16px 0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.tag{display:inline-block;font:500 12px var(--mono);padding:2px 8px;border-radius:99px}
+.tag.tts{background:var(--tts-bg);color:var(--tts)}.tag.stt{background:var(--stt-bg);color:var(--stt)}.tag.llm{background:var(--llm-bg);color:var(--llm)}
+.tag.gen{background:var(--panel2);color:var(--muted)}
+button,select,input[type=text]{font:inherit}
+.btn,.chip{border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:14px}
+.chip{border-radius:99px;padding:5px 12px;font-size:13px}
+.btn[aria-pressed=true],.chip[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+:focus-visible{outline:2px solid var(--stt);outline-offset:2px}
+input[type=range]{width:100%;accent-color:var(--stt)}
+label{font-size:14px;color:var(--muted)}
+.val{font:500 15px var(--mono);color:var(--fg)}
+pre{background:var(--code);color:var(--codefg);padding:14px 16px;border-radius:8px;overflow-x:auto;font:13px/1.55 var(--mono);margin:10px 0}
+pre .c{color:#7E92A5}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:620px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 12px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--panel2)}
+tr:last-child td{border-bottom:0}
+.bar{height:22px;border-radius:5px;background:var(--panel2);position:relative;overflow:hidden}
+.bar>i{position:absolute;left:0;top:0;bottom:0;display:block}
+.stage{display:flex;gap:6px;align-items:stretch;flex-wrap:wrap}
+.stage .node{flex:1 1 120px;min-width:110px;text-align:center;padding:12px 8px;border:2px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer;font-weight:600}
+.stage .node small{display:block;font:400 12px var(--mono);color:var(--muted);margin-top:2px}
+.stage .node[aria-pressed=true]{border-color:var(--fg)}
+.stage .arrow{align-self:center;color:var(--muted);font-family:var(--mono)}
+.stage .node.tts{border-color:var(--tts)}.stage .node.stt{border-color:var(--stt)}.stage .node.llm{border-color:var(--llm)}
+.stage .node[aria-pressed=true].tts{background:var(--tts-bg)}.stage .node[aria-pressed=true].stt{background:var(--stt-bg)}.stage .node[aria-pressed=true].llm{background:var(--llm-bg)}
+.note{border-left:3px solid var(--llm);background:var(--llm-bg);padding:10px 14px;border-radius:0 8px 8px 0;margin:14px 0;max-width:68ch;font-size:15px}
+.note.warn{border-color:var(--warn)}
+.cols2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+dl.gl{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr);gap:0;margin:12px 0}
+dl.gl dt{font:500 14px var(--mono);padding:10px 8px 10px 0;border-bottom:1px solid var(--line)}
+dl.gl dd{margin:0;padding:10px 0;border-bottom:1px solid var(--line);color:var(--muted)}
+dl.gl dd b{color:var(--fg);font-weight:600}
+input[type=text]{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)}
+.step{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.step b.n{flex:0 0 30px;height:30px;border-radius:50%;background:var(--panel2);display:grid;place-items:center;font:500 13px var(--mono)}
+.step.on b.n{background:var(--fg);color:var(--bg)}
+.themebtn{position:fixed;right:max(12px,env(safe-area-inset-right,0px));top:calc(10px + env(safe-area-inset-top,0px));z-index:5}
+@media (max-width:860px){
+  .shell{grid-template-columns:minmax(0,1fr);gap:0}
+  nav{position:sticky;height:auto;top:0;z-index:4;background:var(--bg);display:flex;gap:6px;overflow-x:auto;padding:10px 0;border-bottom:1px solid var(--line);padding-top:calc(10px + env(safe-area-inset-top,0px))}
+  nav .brand,nav .sub{display:none}
+  nav a{white-space:nowrap;border:1px solid var(--line);border-radius:99px}
+  .themebtn{display:none}
+  dl.gl{grid-template-columns:1fr}dl.gl dt{border:0;padding-bottom:0}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<button class="btn themebtn" id="themeBtn" aria-label="Switch light or dark theme">Theme</button>
+<div class="shell">
+<nav id="nav" aria-label="Sections">
+  <div class="brand">Voice AI<br>Field Guide</div>
+  <div class="sub">For a reader new to Python and AI models</div>
+  <a href="#start">0 · Start here</a>
+  <a href="#kinds">1 · TTS, STT, LLM</a>
+  <a href="#flow">2 · The flow</a>
+  <a href="#engines">2b · Engine interface</a>
+  <a href="#formats">3 · Model formats</a>
+  <a href="#lifecycle">4 · How models are made</a>
+  <a href="#algos">5 · Algorithms</a>
+  <a href="#runtime">6 · Run: stream, cache, parallel</a>
+  <a href="#optimize">6b · Optimizations</a>
+  <a href="#hardware">7 · CUDA, MLX, containers</a>
+  <a href="#python">8 · Python in 10 minutes</a>
+  <a href="#scratch">9 · Build from scratch</a>
+  <a href="#glossary">10 · Glossary</a>
+</nav>
+
+<main>
+<section id="start">
+  <div class="kicker">Voicebox · your repo</div>
+  <h1>Voice AI, from zero.</h1>
+  <p class="lede">This page explains how speech and text models work and how they run on a computer. Each section has a small tool to try. No Python knowledge is needed.</p>
+  <div class="grid3" style="margin-top:18px">
+    <div class="panel"><span class="tag tts">TTS</span><h3 style="margin-top:8px">Text to speech</h3><p>Text goes in. A voice comes out.</p></div>
+    <div class="panel"><span class="tag stt">STT</span><h3 style="margin-top:8px">Speech to text</h3><p>A voice goes in. Text comes out.</p></div>
+    <div class="panel"><span class="tag llm">LLM</span><h3 style="margin-top:8px">Large language model</h3><p>Text goes in. New text comes out.</p></div>
+  </div>
+  <h3>What is in your repo</h3>
+  <p>The folder <code>backend/backends/</code> holds one Python file for each engine. The file names show these engines:</p>
+  <div class="row" id="engineChips" style="margin:8px 0"></div>
+  <p id="engineInfo" class="note" style="margin-top:6px">Click an engine to see its role.</p>
+  <div class="note warn"><b>Caution.</b> The role of each engine comes from the file names and the commit messages. Read the model card of each engine to check the details.</div>
+</section>
+
+<section id="kinds">
+  <div class="kicker">Topic 1</div>
+  <h2>TTS, STT and LLM: the difference</h2>
+  <p>All three are neural networks. A neural network is a large set of numbers (weights) that turns an input into an output. The type of input and output is what makes them different.</p>
+  <div class="row" role="tablist" id="kindTabs">
+    <button class="btn" data-k="tts" aria-pressed="true">TTS</button>
+    <button class="btn" data-k="stt" aria-pressed="false">STT</button>
+    <button class="btn" data-k="llm" aria-pressed="false">LLM</button>
+  </div>
+  <div class="panel" id="kindBody"></div>
+  <h3>Compare side by side</h3>
+  <div class="tablewrap"><table>
+    <tr><th></th><th>TTS</th><th>STT</th><th>LLM</th></tr>
+    <tr><td>Input</td><td>Text, a voice sample</td><td>Audio</td><td>Text (tokens)</td></tr>
+    <tr><td>Output</td><td>Audio</td><td>Text</td><td>Text (tokens)</td></tr>
+    <tr><td>Typical size</td><td>80M – 2B parameters</td><td>70M – 2B parameters</td><td>0.5B – 400B+ parameters</td></tr>
+    <tr><td>Quality measure</td><td>MOS (people rate the voice), speaker similarity</td><td>WER (word error rate, lower is better)</td><td>Benchmarks, human preference</td></tr>
+    <tr><td>Speed measure</td><td>RTF, time to first audio</td><td>RTF, delay of the final text</td><td>Tokens per second, time to first token</td></tr>
+    <tr><td>Main risk</td><td>Wrong words, robot tone, voice misuse</td><td>Wrong words in noise, wrong language</td><td>Made-up facts (hallucination)</td></tr>
+  </table></div>
+  <p><b>RTF</b> (real-time factor) is compute time divided by audio time. RTF 0.2 means 10 seconds of audio takes 2 seconds to make. RTF below 1 is fast enough for live use.</p>
+</section>
+
+<section id="flow">
+  <div class="kicker">Topic 2</div>
+  <h2>The simple flow</h2>
+  <p>A voice assistant joins the three models in a chain. Click a stage to read what happens and where it lives in this repo.</p>
+  <div class="stage" id="stages"></div>
+  <div class="panel" id="stageBody"></div>
+  <p>The LiveKit plugins in <code>integrations/livekit/</code> let a LiveKit voice agent call Voicebox for STT and TTS. The LLM stage is a separate service.</p>
+</section>
+
+<section id="engines">
+  <div class="kicker">Topic 2b · from backend/backends/__init__.py</div>
+  <h2>One interface, many engines</h2>
+  <p>Every engine has its own file, but all engines of one type share the same set of methods. The rest of the app calls only these methods. It never calls model code directly.</p>
+
+  <h3>The contract</h3>
+  <p>Python calls this a <b>Protocol</b>: a list of methods. An engine does not inherit from it. It only needs methods with the same names. Click a type.</p>
+  <div class="row" id="protoTabs"></div>
+  <div class="panel" id="protoBody"></div>
+
+  <h3>Three shared parts</h3>
+  <dl class="gl">
+    <dt>ModelConfig</dt><dd>A record for each downloadable model: name, engine, Hugging Face repo, size in MB, languages, and flags (<code>needs_trim</code>, <code>retries_runaway</code>, <code>supports_instruct</code>, <code>stream_adapter</code>). The app reads the flags and does not ask the engine.</dd>
+    <dt>Factory</dt><dd><code>get_tts_backend_for_engine("kokoro")</code> makes the engine on first use and keeps it. A lock stops two requests from making it twice. The imports sit inside the function, so a missing library breaks only its own engine.</dd>
+    <dt>base.py</dt><dd>Shared helpers: device choice (<code>cuda</code>, <code>mps</code>, <code>cpu</code>; <code>VOICEBOX_FORCE_CPU=1</code> forces CPU), cache checks, download progress, voice prompt joining, and memory cleanup.</dd>
+  </dl>
+
+  <h3>The engines</h3>
+  <p>Filter by type. Click a row to see why this engine exists.</p>
+  <div class="row" id="engKind"></div>
+  <div class="tablewrap" style="margin-top:10px"><table id="engTable"></table></div>
+  <div class="panel" id="engDetail">Click an engine row.</div>
+
+  <h3>Why the engines differ</h3>
+  <div class="grid3">
+    <div class="panel"><b>The product feature</b><p>Cloning a voice, preset voices, a style instruction, or a voice made from a text description. One <code>generate()</code> call cannot hide these differences. So the flags and the voice prompt carry them.</p></div>
+    <div class="panel"><b>Size and speed</b><p>From about 300 MB (LuxTTS, Kokoro) to 8,000 MB (TADA 3B). A user picks a fast small model or a large natural one.</p></div>
+    <div class="panel"><b>Languages and licence</b><p>LuxTTS: English only. Kokoro: 8. Chatterbox and OmniVoice: 23. OmniVoice weights are non-commercial, so it is never a default.</p></div>
+    <div class="panel"><b>Library quirks</b><p>Each model has its own loader and sample rate. Some add noise after the end (<code>needs_trim</code>) or do not stop (<code>retries_runaway</code>).</p></div>
+    <div class="panel"><b>Hardware</b><p><code>qwen</code> and <code>chatterbox</code> have a PyTorch file and an MLX file. The code comment says MLX Chatterbox is 7–9× faster on a Mac. MLX also needs all calls on one thread.</p></div>
+    <div class="panel"><b>Streaming style</b><p>STT engines stream in 3 ways: <code>segmented</code>, <code>rolling</code> or <code>native</code>. See topic 6.</p></div>
+  </div>
+  <div class="note warn"><b>Weak points.</b> The factory is a long <code>if/elif</code> list. A new engine needs 3 edits: the engine dictionary, a <code>ModelConfig</code> function, and the factory branch. Some engines ignore <code>instruct</code> or <code>seed</code> without an error. Only the <code>supports_instruct</code> flag tells you.</div>
+</section>
+
+<section id="formats">
+  <div class="kicker">Topic 3</div>
+  <h2>Model formats</h2>
+  <p>A model is a file (or a folder of files) with weights. The <i>format</i> says how the numbers are stored and which program can read them. Choose a runtime first. Then choose the format that this runtime reads.</p>
+  <div class="row" id="fmtChips" aria-label="Filter by runtime"></div>
+  <div class="tablewrap" style="margin-top:10px"><table id="fmtTable"></table></div>
+  <div class="note warn"><b>Caution.</b> A pickle file (<code>.pt</code>, <code>.pth</code>, <code>.bin</code>) can run code when you load it. Load files only from sources that you trust. Prefer <code>.safetensors</code>.</div>
+
+  <h3>Quantization: make a model smaller</h3>
+  <p>Quantization stores each weight with fewer bits. The file gets smaller and faster. The quality drops a little. Move the sliders to see the memory need.</p>
+  <div class="panel">
+    <div class="cols2">
+      <div><label for="qParams">Parameters: <span class="val" id="qParamsV"></span></label><input id="qParams" type="range" min="0.1" max="70" step="0.1" value="7"></div>
+      <div><label for="qBits">Bits per weight</label>
+        <div class="row" id="qBits" style="margin-top:6px"></div></div>
+    </div>
+    <div style="margin-top:14px"><div class="bar"><i id="qBar" style="background:var(--stt)"></i></div>
+    <p style="margin:8px 0 0"><span class="val" id="qOut"></span> <span style="color:var(--muted)" id="qHint"></span></p></div>
+  </div>
+  <p style="color:var(--muted);font-size:14px">Rule: file size ≈ parameters × bits ÷ 8. Add about 20% for activations and the KV cache. The real number depends on the context length.</p>
+
+  <h3>Audio formats you will meet</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Format</th><th>What it is</th><th>Used for</th></tr>
+    <tr><td>WAV / PCM</td><td>Raw samples, no compression</td><td>Input to STT, output of TTS in code</td></tr>
+    <tr><td>16 kHz mono</td><td>16,000 samples each second, 1 channel</td><td>Common STT input (Whisper-type models)</td></tr>
+    <tr><td>24 kHz</td><td>24,000 samples each second</td><td>Common TTS output (check each model)</td></tr>
+    <tr><td>MP3 / Opus</td><td>Compressed audio</td><td>Network and storage; decode to PCM before STT</td></tr>
+    <tr><td>Mel spectrogram</td><td>Picture of sound: time × frequency</td><td>Inner format of many models, not a file</td></tr>
+    <tr><td>Codec tokens</td><td>Audio turned into integer tokens by a neural codec</td><td>LLM-style TTS predicts these tokens</td></tr>
+  </table></div>
+</section>
+
+<section id="lifecycle">
+  <div class="kicker">Topic 4</div>
+  <h2>How a model is made and then run</h2>
+  <p>Click each step. The first four steps happen at a lab with many GPUs. You do only the last four.</p>
+  <div class="row" style="margin-bottom:6px"><button class="btn" id="lcPrev">Back</button><button class="btn" id="lcNext">Next step</button></div>
+  <div class="panel" id="lcList"></div>
+</section>
+
+<section id="algos">
+  <div class="kicker">Topic 5</div>
+  <h2>Algorithms and approaches</h2>
+  <p>Many designs exist. This list shows the main families. A new model is often a mix of two or more.</p>
+  <div class="row" id="algoTabs"></div>
+  <div class="tablewrap" style="margin-top:10px"><table id="algoTable"></table></div>
+
+  <h3>Try it: how an LLM picks the next word</h3>
+  <p>An LLM gives a score to every possible next token. Sampling turns the scores into a choice. TTS models that predict audio tokens use the same step.</p>
+  <div class="panel">
+    <div class="cols2">
+      <div><label for="sT">Temperature: <span class="val" id="sTV"></span></label><input id="sT" type="range" min="0.1" max="2" step="0.05" value="1"></div>
+      <div><label for="sK">Top-k (keep best k tokens): <span class="val" id="sKV"></span></label><input id="sK" type="range" min="1" max="8" step="1" value="8"></div>
+    </div>
+    <p style="margin:12px 0 4px">Prompt: <code>"The capital of France is"</code></p>
+    <div id="sBars"></div>
+    <p style="color:var(--muted);font-size:14px">Low temperature: the top token wins nearly every time. High temperature: the choice is more random. Top-k removes the weak tokens first. Temperature 0 (greedy) always takes the top token.</p>
+  </div>
+</section>
+
+<section id="runtime">
+  <div class="kicker">Topic 6</div>
+  <h2>Inference: streaming, parallel work, caching</h2>
+  <p><b>Inference</b> means to run a trained model. It is different from training, which changes the weights. Inference only reads them.</p>
+
+  <h3>Streaming</h3>
+  <p>Without streaming, the user waits for the full result. With streaming, the model sends small pieces as soon as they are ready. Set the numbers to see the effect on TTS.</p>
+  <div class="panel">
+    <div class="cols2">
+      <div><label for="stDur">Length of the audio: <span class="val" id="stDurV"></span></label><input id="stDur" type="range" min="2" max="60" value="20"></div>
+      <div><label for="stRtf">RTF (compute ÷ audio time): <span class="val" id="stRtfV"></span></label><input id="stRtf" type="range" min="0.05" max="2" step="0.05" value="0.4"></div>
+      <div><label for="stChunk">First chunk of audio: <span class="val" id="stChunkV"></span></label><input id="stChunk" type="range" min="0.2" max="5" step="0.1" value="1"></div>
+    </div>
+    <div id="stOut" style="margin-top:14px"></div>
+  </div>
+  <p>Your repo has streaming for both directions. TTS sends audio pieces while it generates. STT has two styles, named in your commits:</p>
+  <ul>
+    <li><b>Rolling window</b> (Qwen3-ASR adapter): the model re-reads the last few seconds again and again. The text can change. The adapter sends <i>interim</i> text, then final text.</li>
+    <li><b>Native streaming</b> (Voxtral Realtime adapter): the model is built to read audio in order. The text is <i>append-only</i>. Old words do not change.</li>
+  </ul>
+
+  <h3>Caching</h3>
+  <p>Four caches matter. The first one gives the largest gain.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Cache</th><th>What it stores</th><th>Gain</th></tr>
+    <tr><td>KV cache</td><td>Attention keys and values of tokens already read</td><td>Each new token costs a fixed amount, not more and more</td></tr>
+    <tr><td>Model cache in memory</td><td>The loaded model, kept between requests</td><td>No 5–60 second load for each request</td></tr>
+    <tr><td>Disk cache (Hugging Face)</td><td>Downloaded weights in <code>~/.cache/huggingface</code></td><td>Download only once</td></tr>
+    <tr><td>Prompt / voice cache</td><td>Result of a long prompt or a voice sample</td><td>Reuse a cloned voice without new analysis</td></tr>
+  </table></div>
+  <div class="panel">
+    <label for="kvN">Tokens generated: <span class="val" id="kvNV"></span></label><input id="kvN" type="range" min="10" max="2000" step="10" value="500">
+    <div class="cols2" style="margin-top:12px">
+      <div>Without KV cache<div class="bar"><i id="kvA" style="background:var(--warn)"></i></div><span class="val" id="kvAV"></span></div>
+      <div>With KV cache<div class="bar"><i id="kvB" style="background:var(--ok)"></i></div><span class="val" id="kvBV"></span></div>
+    </div>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:0">Count of token positions the model must process. Without the cache the work grows with n². With the cache it grows with n. The cost is memory.</p>
+  </div>
+
+  <h3>Parallel work</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Method</th><th>Meaning</th><th>Use here</th></tr>
+    <tr><td>Batching</td><td>One model call handles many requests together</td><td>Biggest gain on a GPU server. Used by LLM servers (vLLM).</td></tr>
+    <tr><td>Threads</td><td>Several tasks in one Python process</td><td>Python has the GIL: only one thread runs Python code at a time. Heavy math in torch or MLX releases it.</td></tr>
+    <tr><td>Processes</td><td>Separate Python programs, each with its own memory</td><td>True parallel work. Each process needs its own copy of the model.</td></tr>
+    <tr><td>async / await</td><td>One thread switches tasks while it waits for I/O</td><td>FastAPI routes. Good for network, not for math.</td></tr>
+    <tr><td>GPU streams</td><td>The GPU does several jobs at once</td><td>Handled by the library</td></tr>
+  </table></div>
+  <div class="note"><b>In your repo.</b> The commit <code>1ed9a69</code> says streaming TTS and custom STT run "on the shared MLX thread". MLX does not allow two threads to use the same GPU state at once. So the code sends all MLX work to one thread. Web requests stay async. Heavy work waits in a queue.</div>
+</section>
+
+<section id="optimize">
+  <div class="kicker">Topic 6b</div>
+  <h2>Optimization options in the field today</h2>
+  <p>Teams improve a model in 4 ways: make it <b>faster</b>, make it <b>smaller</b> (memory), make it <b>respond sooner</b> (latency), or make the <b>output better</b>. Filter by model type and by goal. Click a card to open it.</p>
+  <div class="row" id="optType" aria-label="Model type"></div>
+  <div class="row" id="optGoal" aria-label="Goal" style="margin-top:8px"></div>
+  <p id="optCount" style="color:var(--muted);font-size:14px;margin:10px 0 0"></p>
+  <div class="grid3" id="optGrid" style="margin-top:8px"></div>
+
+  <h3>A sensible order</h3>
+  <ol>
+    <li><b>Measure first.</b> Record RTF, time to first audio or token, WER, and peak memory. Without numbers you cannot tell if a change helped.</li>
+    <li><b>Free choices.</b> Pick the right model size, set the language, keep the model loaded, and use the best device (MLX on a Mac, CUDA on NVIDIA).</li>
+    <li><b>Cheap tricks.</b> Quantize, use a caching layer, cut text into sentences, gate STT with VAD.</li>
+    <li><b>Serving tricks.</b> Batching, streaming, speculative decoding. These need more code or a special server.</li>
+    <li><b>Training tricks.</b> Distillation and fine-tuning. These cost the most. Use them last.</li>
+  </ol>
+  <div class="note warn"><b>Caution.</b> The gains on the cards are typical ranges from public reports. Your result depends on the model, the chip and the input. Test each change on your own data, and listen to TTS output after quantization.</div>
+  <div class="note"><b>In this repo</b> (checked in the code): separate MLX engines for Apple Silicon, <code>bf16</code> MLX weights, several model sizes for each engine, unload and cache-clear functions, an offline-first Hugging Face cache check, one worker thread for MLX, text trimming and chunk retry for runaway TTS, and 3 STT streaming styles. I did not check for VAD, batching or speculative decoding.</div>
+</section>
+
+<section id="hardware">
+  <div class="kicker">Topic 7</div>
+  <h2>CUDA, MLX, containers and other names</h2>
+  <h3>Where the math runs</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Name</th><th>What it is</th><th>Where</th></tr>
+    <tr><td>CPU</td><td>General processor. Slow for big models. Works everywhere.</td><td>All</td></tr>
+    <tr><td>GPU</td><td>Chip with thousands of small cores. Fast at matrix math.</td><td>All</td></tr>
+    <tr><td>CUDA</td><td>NVIDIA software layer that lets programs use NVIDIA GPUs</td><td>NVIDIA, Linux and Windows</td></tr>
+    <tr><td>ROCm</td><td>AMD version of CUDA (repo has <code>requirements-rocm.txt</code>)</td><td>AMD GPUs</td></tr>
+    <tr><td>Metal / MPS</td><td>Apple GPU layer. MPS is the PyTorch backend for it.</td><td>Mac (Apple Silicon)</td></tr>
+    <tr><td>MLX</td><td>Apple array library made for Apple Silicon. Often faster than MPS. (<code>requirements-mlx.txt</code>)</td><td>Mac only</td></tr>
+    <tr><td>VRAM</td><td>GPU memory. A model must fit in it. Macs share one memory with the CPU (unified memory).</td><td></td></tr>
+    <tr><td>PyTorch</td><td>Main Python library for neural networks. Most models use it.</td><td>All</td></tr>
+  </table></div>
+  <p>Your Mac uses MLX files (<code>*_mlx_backend.py</code>). A Linux server with NVIDIA uses PyTorch with CUDA. That is why the repo has two sets of backends and two requirement files.</p>
+
+  <h3>Packaging names</h3>
+  <dl class="gl">
+    <dt>venv</dt><dd><b>Virtual environment.</b> A private folder of Python libraries for one project. Your repo has <code>backend/venv</code>.</dd>
+    <dt>pip / requirements.txt</dt><dd>The tool that installs libraries, and the list of libraries to install.</dd>
+    <dt>pyproject.toml</dt><dd>Modern project file: name, version, dependencies, tool settings.</dd>
+    <dt>.python-version</dt><dd>Says which Python version to use. Yours says <code>3.12</code>.</dd>
+    <dt>Docker image</dt><dd>A frozen package with the OS files, Python and your code. Like a template.</dd>
+    <dt>Container</dt><dd>A running copy of an image. It is isolated from the rest of the computer. Start and stop it fast.</dd>
+    <dt>nvidia-container-toolkit</dt><dd>Lets a container use the host NVIDIA GPU. Without it, the container sees only the CPU. Docker on a Mac cannot use the Apple GPU.</dd>
+    <dt>PyInstaller</dt><dd>Packs Python and the code into one program. The file <code>voicebox-server.spec</code> does this for the desktop app.</dd>
+    <dt>Hugging Face Hub</dt><dd>A website that hosts models, like GitHub for models. A repo id looks like <code>org/model-name</code>.</dd>
+    <dt>FastAPI / uvicorn</dt><dd>The web framework and the server that run <code>backend/app.py</code> and <code>routes/</code>.</dd>
+    <dt>MCP</dt><dd>A protocol that lets an AI agent call tools. See <code>backend/mcp_server/</code>.</dd>
+    <dt>WebSocket / SSE</dt><dd>Two ways to push data from server to client while a task runs. Used for streaming audio and text.</dd>
+  </dl>
+  <div class="note"><b>Container or venv?</b> Use a venv on your own computer. Use a container to ship the same setup to a server.</div>
+</section>
+
+<section id="python">
+  <div class="kicker">Topic 8</div>
+  <h2>Python in 10 minutes</h2>
+  <p>You need to read Python, not write it. Pick a topic.</p>
+  <div class="row" id="pyTabs"></div>
+  <div class="panel" id="pyBody"></div>
+  <h3>Read the repo in this order</h3>
+  <ol>
+    <li><code>backend/backends/base.py</code> — the shared interface that every engine follows.</li>
+    <li>One small engine, for example <code>kokoro_backend.py</code> — load a model, then make audio.</li>
+    <li><code>backend/routes/</code> — the web endpoints that call the engines.</li>
+    <li><code>backend/backends/stt_streaming.py</code> — how streaming chunks are handled.</li>
+  </ol>
+</section>
+
+<section id="scratch">
+  <div class="kicker">Topic 9</div>
+  <h2>Build the same features from scratch</h2>
+  <p>Use a ready model and a few lines of code. Each example below is a small start. Check each library page for the current API, because these libraries change fast.</p>
+  <div class="row" id="scTabs"></div>
+  <pre id="scCode"></pre>
+  <p id="scNote" class="note"></p>
+
+  <h3>Your learning path</h3>
+  <div class="panel" id="path"></div>
+</section>
+
+<section id="glossary">
+  <div class="kicker">Topic 10</div>
+  <h2>Glossary</h2>
+  <label for="gSearch">Search a word</label>
+  <input type="text" id="gSearch" placeholder="Type: token, WER, LoRA, codec…" autocomplete="off">
+  <dl class="gl" id="gList"></dl>
+</section>
+</main>
+</div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function pressGroup(box,cb){box.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;[...box.children].forEach(x=>x.setAttribute('aria-pressed',x===b));cb(b)})}
+
+/* theme */
+$('#themeBtn').onclick=()=>{const r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;r.dataset.theme=dark?'light':'dark'};
+
+/* nav highlight */
+const links=$$('nav a'),secs=links.map(a=>$(a.getAttribute('href')));
+addEventListener('scroll',()=>{let i=0;secs.forEach((s,n)=>{if(s.getBoundingClientRect().top<140)i=n});links.forEach((a,n)=>a.classList.toggle('on',n===i))},{passive:true});
+
+/* engines */
+const ENG={
+ 'Kokoro':['tts','Small, fast TTS (about 82M parameters, StyleTTS2-based). Many fixed voices. Runs well on CPU.'],
+ 'Chatterbox':['tts','TTS with voice cloning from a short sample. Has Turbo and MLX variants in the repo.'],
+ 'LuxTTS':['tts','A TTS engine with its own backend file.'],
+ 'TADA (Hume)':['tts','A TTS engine in <code>hume_backend.py</code>.'],
+ 'OmniVoice':['tts','A TTS engine in <code>omnivoice_backend.py</code>.'],
+ 'Qwen3-TTS':['tts','Qwen TTS. The repo has custom-voice and voice-design variants (describe a voice in words).'],
+ 'Qwen3-ASR':['stt','Speech to text. A rolling-window streaming adapter gives interim text.'],
+ 'Whisper':['stt','Well-known STT model family (encoder-decoder transformer).'],
+ 'Voxtral Realtime':['stt','Speech to text built for streaming. Text is append-only.'],
+ 'Qwen LLM':['llm','Text model in <code>qwen_llm_backend.py</code>. Writes or cleans text.'],
+ 'OpenAI-compatible':['llm','A client for any server with the OpenAI API shape. The model runs elsewhere.']
+};
+$('#engineChips').innerHTML=Object.keys(ENG).map(k=>`<button class="chip" aria-pressed="false">${k}</button>`).join('');
+pressGroup($('#engineChips'),b=>{const [t,d]=ENG[b.textContent];$('#engineInfo').innerHTML=`<span class="tag ${t}">${t.toUpperCase()}</span> <b>${b.textContent}</b>. ${d}`});
+
+/* kinds */
+const KIND={
+ tts:{c:'tts',io:['Text + optional voice sample','Audio waveform'],ex:'"Hello, world"  →  🔊 24,000 samples each second',how:'The model first turns text into sounds (phonemes or tokens). It then makes the sound shape of speech. A last part, the <b>vocoder</b> or <b>codec decoder</b>, turns that shape into audio samples.',watch:['Voice cloning: a few seconds of a voice make a copy of it. Get consent.','Long text: split it into sentences. Models drift on long input.','Numbers and names: expand them to words first.']},
+ stt:{c:'stt',io:['Audio waveform','Text (and often timestamps)'],ex:'🔊 16,000 samples each second  →  "hello world"',how:'The audio becomes a <b>mel spectrogram</b> (a picture of sound). An <b>encoder</b> reads it. A <b>decoder</b> writes the words one token at a time.',watch:['Resample to the rate the model expects (often 16 kHz mono).','Long files: cut into 30-second windows.','Set the language if you know it. Auto detection can fail on short audio.']},
+ llm:{c:'llm',io:['Tokens (pieces of words)','The next token, again and again'],ex:'"The capital of France is"  →  " Paris"',how:'Text is cut into <b>tokens</b> by a tokenizer. A stack of <b>transformer</b> layers uses <b>attention</b> to see how all tokens relate. It gives a probability for the next token. One token is chosen. The loop repeats.',watch:['The context window limits the input plus output length.','Memory grows with context (the KV cache).','The model can state false things with confidence.']}
+};
+function showKind(k){const o=KIND[k];$('#kindBody').innerHTML=`<span class="tag ${o.c}">${k.toUpperCase()}</span>
+<div class="cols2" style="margin-top:10px"><div><div class="kicker">Input</div><p style="margin:2px 0">${o.io[0]}</p></div><div><div class="kicker">Output</div><p style="margin:2px 0">${o.io[1]}</p></div></div>
+<pre style="margin:12px 0">${esc(o.ex)}</pre><p>${o.how}</p><div class="kicker" style="margin-top:12px">Watch for</div><ul>${o.watch.map(w=>`<li>${w}</li>`).join('')}</ul>`}
+pressGroup($('#kindTabs'),b=>showKind(b.dataset.k));showKind('tts');
+
+/* flow */
+const FL=[
+ {n:'Mic',s:'audio in',c:'',t:'The microphone records sound. A browser or app sends it as small PCM pieces (20–100 ms each) over a WebSocket or WebRTC.',f:'app/ (desktop UI), integrations/livekit/'},
+ {n:'STT',s:'audio → text',c:'stt',t:'Voice activity detection finds when the user speaks. The STT model turns the audio into text. A streaming engine sends interim text while the user still speaks, then final text.',f:'backend/backends/qwen_asr_*.py, voxtral_*.py, stt_streaming.py, routes/stt_stream.py'},
+ {n:'LLM',s:'text → text',c:'llm',t:'The text goes in a prompt with the chat history. The LLM writes a reply, token by token. Each token can go to TTS at once, without waiting for the full reply.',f:'backend/backends/qwen_llm_backend.py, openai_compat_backend.py'},
+ {n:'TTS',s:'text → audio',c:'tts',t:'The reply text is cut at sentence ends. The TTS model makes audio for each sentence. The first sentence plays while the next one is still in work.',f:'backend/backends/kokoro_*, chatterbox_*, qwen_*_backend.py, mlx_icl_stream.py'},
+ {n:'Speaker',s:'audio out',c:'',t:'The app plays audio pieces in order. If the user speaks again, the app stops the audio (barge-in) and cancels the TTS and LLM work.',f:'app/src/components/AudioPlayer/'}
+];
+$('#stages').innerHTML=FL.map((x,i)=>`${i?'<span class="arrow">→</span>':''}<button class="node ${x.c}" aria-pressed="${i==1}" data-i="${i}">${x.n}<small>${x.s}</small></button>`).join('');
+function showStage(i){const x=FL[i];$('#stageBody').innerHTML=`<h3 style="margin-top:0">${x.n}</h3><p>${x.t}</p><p class="mono" style="color:var(--muted)">Files: ${x.f}</p>`}
+$('#stages').addEventListener('click',e=>{const b=e.target.closest('.node');if(!b)return;$$('#stages .node').forEach(n=>n.setAttribute('aria-pressed',n===b));showStage(+b.dataset.i)});showStage(1);
+
+/* engines */
+const PROTO={
+ TTS:['tts',[['load_model(size)','Load weights into memory'],['create_voice_prompt(audio, ref_text)','Turn a reference clip into a voice prompt (a dict). Returns (prompt, was_cached)'],['combine_voice_prompts(paths, texts)','Join several samples into one'],['generate(text, voice_prompt, language, seed, instruct)','Returns (audio_array, sample_rate)'],['unload_model()','Free memory'],['is_loaded()','Is the model in memory?'],['_get_model_path(size)','Local path or Hugging Face id']],'9 engines'],
+ STT:['stt',[['load_model(size)','Load weights'],['transcribe(audio_path, language, model_size)','Returns the text as a string'],['unload_model()','Free memory'],['is_loaded()','Is the model in memory?']],'3 engines. Streaming is a separate layer (<code>stt_streaming.py</code>) that wraps these.'],
+ LLM:['llm',[['load_model(size)','Load weights and tokenizer'],['generate(prompt, system, max_tokens, temperature, model_size, examples)','One chat turn. Returns the reply text. <code>examples</code> are (user, assistant) pairs sent as real chat turns'],['unload_model()','Free memory'],['is_loaded()','Is the model in memory?']],'2 engines']
+};
+$('#protoTabs').innerHTML=Object.keys(PROTO).map((k,i)=>`<button class="btn" aria-pressed="${i==0}">${k}Backend</button>`).join('');
+function drawProto(k){const [c,m,n]=PROTO[k];$('#protoBody').innerHTML=`<span class="tag ${c}">${k}</span> <span style="color:var(--muted)">${n}</span><div class="tablewrap" style="margin-top:10px"><table><tr><th>Method</th><th>Purpose</th></tr>${m.map(r=>`<tr><td><code>${esc(r[0])}</code></td><td>${r[1]}</td></tr>`).join('')}</table></div>`}
+pressGroup($('#protoTabs'),b=>drawProto(b.textContent.replace('Backend','')));drawProto('TTS');
+
+const EN=[
+ ['tts','qwen','Qwen TTS 0.6B / 1.7B','1,200 / 3,500','10','PyTorch + MLX','Clone','The main cloning engine in two sizes. On MLX it retries text in small chunks if the decoder does not stop.'],
+ ['tts','qwen_custom_voice','Qwen CustomVoice','1,200 / 3,500','10','PyTorch','Instruct','Accepts a style instruction (<code>supports_instruct</code>). Separate weights from the base model, so a separate engine.'],
+ ['tts','qwen_voice_design','Qwen VoiceDesign','—','—','PyTorch','Describe','Makes a new voice from a text description.'],
+ ['tts','luxtts','LuxTTS','300','1 (en)','PyTorch','Clone','Smallest, "fast, CPU-friendly". English only.'],
+ ['tts','chatterbox','Chatterbox (multilingual)','3,000–3,200','23','PyTorch + MLX','Clone','Cloning from a reference clip, 23 languages. Output needs trimming. MLX port is 7–9× faster on a Mac.'],
+ ['tts','chatterbox_turbo','Chatterbox Turbo','1,500','1 (en)','PyTorch','Clone','Smaller, English, supports tags. Output needs trimming.'],
+ ['tts','tada','TADA 1B / 3B','4,000 / 8,000','1 / 10','PyTorch','Clone','The largest models. 1B is English, 3B is multilingual.'],
+ ['tts','kokoro','Kokoro 82M','350','8','PyTorch','Preset','Preset voices only, no cloning. <code>create_voice_prompt</code> returns a default voice. Ignores <code>instruct</code>.'],
+ ['tts','omnivoice','OmniVoice','3,300','23','PyTorch','Instruct','Accepts instructions. Weights are CC-BY-NC (non-commercial), so it is never a default.'],
+ ['stt','whisper','Whisper (base … turbo)','5 sizes','many','PyTorch + MLX','segmented','Default STT (<code>whisper-turbo</code>). Reads audio in windows, so it streams in segments.'],
+ ['stt','qwen_asr','Qwen3-ASR','2 sizes','many','PyTorch','rolling','Re-reads a rolling window and sends interim text that can change.'],
+ ['stt','voxtral_realtime','Voxtral Realtime','1 size','many','PyTorch','native','Built to stream. Text is append-only.'],
+ ['llm','qwen_llm','Qwen3 LLM','3 sizes','many','PyTorch + MLX','Local','Local model. Used by the refine service to clean up text.'],
+ ['llm','openai_compat','OpenAI-compatible','0 (remote)','—','Network','Remote','Calls any server with the OpenAI API shape. Used when the user sets a custom endpoint.']
+];
+$('#engKind').innerHTML=[['all','All'],['tts','TTS'],['stt','STT'],['llm','LLM']].map(([k,v])=>`<button class="chip" data-k="${k}" aria-pressed="${k=='all'}">${v}</button>`).join('');
+function drawEn(k){const rows=EN.map((r,i)=>[r,i]).filter(([r])=>k==='all'||r[0]===k);
+ $('#engTable').innerHTML='<tr><th>Type</th><th>Engine id</th><th>Name</th><th>Size (MB)</th><th>Languages</th><th>Runs on</th><th>Key trait</th></tr>'+rows.map(([r,i])=>`<tr data-i="${i}" tabindex="0" style="cursor:pointer"><td><span class="tag ${r[0]}">${r[0].toUpperCase()}</span></td><td><code>${r[1]}</code></td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td><td>${r[6]}</td></tr>`).join('')}
+function showEn(i){const r=EN[i];$('#engDetail').innerHTML=`<span class="tag ${r[0]}">${r[0].toUpperCase()}</span> <b>${r[2]}</b> <code>${r[1]}</code><p style="margin-bottom:0">${r[7]}</p>`}
+pressGroup($('#engKind'),b=>drawEn(b.dataset.k));drawEn('all');
+$('#engTable').addEventListener('click',e=>{const t=e.target.closest('tr[data-i]');if(t)showEn(+t.dataset.i)});
+$('#engTable').addEventListener('keydown',e=>{if(e.key==='Enter'){const t=e.target.closest('tr[data-i]');if(t)showEn(+t.dataset.i)}});
+
+/* formats */
+const FM=[
+ ['.safetensors','Plain tensors with a small header. No code runs on load. Can be mapped from disk.','torch,mlx','Standard on Hugging Face. First choice.'],
+ ['.pt / .pth / .bin','PyTorch pickle. Can hold weights or a whole object.','torch','Old style. Can run code on load. Use <code>weights_only=True</code>.'],
+ ['.gguf','One file: weights, tokenizer, settings, 2–8 bit quantization.','cpp','Used by llama.cpp, Ollama, LM Studio. Good for LLMs on laptops.'],
+ ['MLX folder','<code>safetensors</code> files plus a config, in the MLX layout. Often 4-bit or 8-bit.','mlx','Repos named <code>mlx-community/…</code>. Mac only.'],
+ ['ONNX','Graph of operations plus weights. Not tied to Python or PyTorch.','onnx','Run with onnxruntime on CPU, CUDA, mobile. Good for small TTS.'],
+ ['CTranslate2','Converted model for fast CPU and GPU decoding.','ct2','Used by faster-whisper. 2–4× faster than plain PyTorch.'],
+ ['TensorRT / Core ML','Compiled for one chip family.','hw','Fastest, but not portable. Build per device.'],
+ ['AWQ / GPTQ','Quantized PyTorch weights for GPUs.','torch','Used by vLLM and transformers for large LLMs.']
+];
+const RT={all:'All',torch:'PyTorch (CUDA / MPS / CPU)',mlx:'MLX (Mac)',cpp:'llama.cpp',onnx:'ONNX Runtime',ct2:'CTranslate2',hw:'Vendor compiler'};
+$('#fmtChips').innerHTML=Object.entries(RT).map(([k,v])=>`<button class="chip" data-k="${k}" aria-pressed="${k=='all'}">${v}</button>`).join('');
+function drawFmt(k){$('#fmtTable').innerHTML='<tr><th>Format</th><th>What it is</th><th>Runs on</th><th>Note</th></tr>'+FM.filter(r=>k==='all'||r[2]===k).map(r=>`<tr><td><code>${r[0]}</code></td><td>${r[1]}</td><td>${RT[r[2]]}</td><td>${r[3]}</td></tr>`).join('')}
+pressGroup($('#fmtChips'),b=>drawFmt(b.dataset.k));drawFmt('all');
+
+let bits=16;
+$('#qBits').innerHTML=[32,16,8,4,3].map(b=>`<button class="chip" data-b="${b}" aria-pressed="${b==16}">${b}-bit</button>`).join('');
+function drawQ(){const p=+$('#qParams').value;$('#qParamsV').textContent=p+'B';const gb=p*bits/8,tot=gb*1.2;
+ $('#qOut').textContent=`≈ ${gb.toFixed(1)} GB weights, ≈ ${tot.toFixed(1)} GB in use`;
+ $('#qBar').style.width=Math.min(100,tot/80*100)+'%';
+ $('#qHint').textContent=tot<8?'Fits a laptop with 16 GB.':tot<24?'Needs a 24 GB GPU or a Mac with 32 GB.':tot<48?'Needs a 48 GB GPU or a Mac with 64 GB.':'Needs several GPUs or a very large Mac.'}
+$('#qParams').oninput=drawQ;pressGroup($('#qBits'),b=>{bits=+b.dataset.b;drawQ()});drawQ();
+
+/* lifecycle */
+const LC=[
+ ['Collect data','Thousands of hours of audio with text (TTS, STT) or trillions of words (LLM). Clean and filter it.','Lab'],
+ ['Design the network','Choose the layers and sizes. Most use the transformer. Pick a tokenizer or audio codec.','Lab'],
+ ['Pre-train','Show the model data again and again. A <b>loss</b> number says how wrong it is. <b>Backpropagation</b> changes the weights to lower the loss. This takes weeks on thousands of GPUs.','Lab'],
+ ['Fine-tune and align','Train more on a small set: a task, a style, a voice, or human preference. <b>LoRA</b> trains only small add-on matrices, so it is cheap.','Lab / you'],
+ ['Export and publish','Save the weights as <code>.safetensors</code> with a <code>config.json</code>. Upload to Hugging Face with a model card and a license.','Lab'],
+ ['Download','Your code calls <code>from_pretrained("org/model")</code>. The files go to the local cache once.','You'],
+ ['Load','Weights go from disk into RAM or VRAM. Set the data type (<code>float16</code>) and the device (<code>cuda</code>, <code>mps</code>, <code>cpu</code>). Takes seconds to minutes.','You'],
+ ['Run (inference)','Feed input. The forward pass gives output. No weight changes. Keep the model loaded between requests.','You']
+];
+let lc=0;function drawLc(){$('#lcList').innerHTML=LC.map((s,i)=>`<div class="step ${i==lc?'on':''}"><b class="n">${i+1}</b><div><b>${s[0]}</b> <span class="tag gen">${s[2]}</span>${i==lc?`<p style="margin:4px 0 0">${s[1]}</p>`:''}</div></div>`).join('')}
+$('#lcNext').onclick=()=>{lc=(lc+1)%LC.length;drawLc()};$('#lcPrev').onclick=()=>{lc=(lc+LC.length-1)%LC.length;drawLc()};drawLc();
+
+/* algorithms */
+const AL={
+ tts:[['Two-stage: acoustic model + vocoder','Tacotron, FastSpeech → HiFi-GAN','Text → mel spectrogram → waveform','Stable, fast. Less natural on expression.'],
+      ['End-to-end VAE + GAN','VITS, StyleTTS2 (Kokoro family)','One network makes the waveform from text','Small and fast. Good on CPU. Fixed or style-based voices.'],
+      ['Autoregressive codec LM','VALL-E style, many new LLM-based TTS (Qwen3-TTS type)','A language model predicts audio-codec tokens one by one; a decoder makes sound','Natural, can clone a voice from a prompt. Slower; can skip or repeat words.'],
+      ['Diffusion / flow matching','F5-TTS, the decoder in some LLM-based TTS','Start from noise; many small steps shape it into speech','High quality. Needs several steps; can run in parallel across time.'],
+      ['Voice cloning','Zero-shot prompt, or fine-tune','Zero-shot: use a 3–30 s sample as a prompt. Fine-tune: train on hours of the voice.','Zero-shot is instant. Fine-tune is more exact.']],
+ stt:[['CTC','wav2vec2, Conformer-CTC','Outputs a token for each audio frame; repeats and blanks are removed','Fast, streams easily. Weak on grammar.'],
+      ['Encoder-decoder attention','Whisper, Qwen3-ASR family','Encoder reads 30 s of audio; decoder writes tokens with attention','Very accurate, many languages. Not natively streaming.'],
+      ['Transducer (RNN-T)','Parakeet-type, phone/edge ASR','Predicts text while it reads audio frames in order','Built for streaming and low delay.'],
+      ['Audio encoder + LLM','Voxtral, Qwen audio models','An LLM reads audio embeddings and writes text; can also answer questions','Strong context use. Large. Realtime variants exist.'],
+      ['Streaming tricks','Rolling window, chunked, VAD','Re-run on the last N seconds, or feed fixed chunks, or cut at silence','Rolling window is simple but text may change. Native streaming is append-only.']],
+ llm:[['Decoder-only transformer','GPT, Llama, Qwen','Stack of attention + feed-forward layers; predicts next token','The base of almost all chat models.'],
+      ['Mixture of experts (MoE)','Mixtral, Qwen-MoE','Each token uses only a few of many expert sub-networks','Big model quality at lower compute. Needs much memory.'],
+      ['Sampling','Greedy, temperature, top-k, top-p','Different ways to choose the next token from the scores','Low temperature for facts; high for ideas.'],
+      ['Speed tricks','KV cache, continuous batching, speculative decoding, FlashAttention','Reuse past work, merge requests, guess tokens with a small model','2–10× throughput on a server.'],
+      ['Adapt a model','Prompting, RAG, LoRA, full fine-tune','Add text, add retrieved documents, or change some weights','Start with prompting; move down only if needed.']]
+};
+$('#algoTabs').innerHTML=['tts','stt','llm'].map((k,i)=>`<button class="btn" data-k="${k}" aria-pressed="${i==0}">${k.toUpperCase()}</button>`).join('');
+function drawAl(k){$('#algoTable').innerHTML='<tr><th>Approach</th><th>Examples</th><th>How it works</th><th>Trade-off</th></tr>'+AL[k].map(r=>`<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}
+pressGroup($('#algoTabs'),b=>drawAl(b.dataset.k));drawAl('tts');
+
+/* sampling */
+const TOK=[[' Paris',9],[' Lyon',5.6],[' the',5],[' a',4.2],[' located',3.8],[' Marseille',3.6],[' France',3],[' Berlin',2.2]];
+function drawS(){const T=+$('#sT').value,K=+$('#sK').value;$('#sTV').textContent=T.toFixed(2);$('#sKV').textContent=K;
+ const kept=TOK.map((t,i)=>[t,i<K]);const ex=kept.map(([t,k])=>k?Math.exp(t[1]/T):0),z=ex.reduce((a,b)=>a+b,0);
+ $('#sBars').innerHTML=kept.map(([t,k],i)=>{const p=ex[i]/z;return `<div style="display:grid;grid-template-columns:90px 1fr 54px;gap:8px;align-items:center;margin:4px 0;opacity:${k?1:.35}"><code>${esc(t[0])}</code><div class="bar"><i style="width:${p*100}%;background:var(--llm)"></i></div><span class="val">${(p*100).toFixed(1)}%</span></div>`}).join('')}
+$('#sT').oninput=$('#sK').oninput=drawS;drawS();
+
+/* streaming sim */
+function drawSt(){const d=+$('#stDur').value,r=+$('#stRtf').value,c=+$('#stChunk').value;
+ $('#stDurV').textContent=d+' s';$('#stRtfV').textContent=r.toFixed(2);$('#stChunkV').textContent=c.toFixed(1)+' s';
+ const full=r*d,first=r*c,max=Math.max(full,d)*1.05;
+ const row=(l,w,col,v)=>`<div style="display:grid;grid-template-columns:150px 1fr 70px;gap:8px;align-items:center;margin:6px 0"><span>${l}</span><div class="bar"><i style="width:${w/max*100}%;background:${col}"></i></div><span class="val">${v.toFixed(1)} s</span></div>`;
+ let html=row('No streaming: wait',full,'var(--warn)',full)+row('Streaming: wait',first,'var(--ok)',first);
+ html+=r<=1?`<p style="margin:8px 0 0">Streaming plays the first sound ${(full/first).toFixed(0)}× sooner. RTF ≤ 1, so the audio never stops.</p>`
+  :`<p style="margin:8px 0 0;color:var(--warn)"><b>Gaps.</b> RTF is above 1: the model is slower than playback. Streaming starts early but the audio will stop and wait. Use a faster model, a smaller one, or buffer more first.</p>`;
+ $('#stOut').innerHTML=html}
+['#stDur','#stRtf','#stChunk'].forEach(s=>$(s).oninput=drawSt);drawSt();
+
+/* kv cache */
+function drawKv(){const n=+$('#kvN').value;$('#kvNV').textContent=n;const a=n*(n+1)/2;$('#kvA').style.width='100%';$('#kvB').style.width=Math.max(1,n/a*100)+'%';
+ $('#kvAV').textContent=a.toLocaleString()+' positions';$('#kvBV').textContent=n.toLocaleString()+' positions ('+(a/n).toFixed(0)+'× less)'}
+$('#kvN').oninput=drawKv;drawKv();
+
+/* optimizations */
+// [name, types, goals, gain, cost, how, tools, repoNote]
+const OP=[
+ ['Quantization (8 / 4-bit)',['llm','tts','stt'],['memory','speed'],'2–4× smaller; often 1.3–2× faster','Small quality loss. Check TTS by ear.','Store weights with fewer bits. Post-training methods need no new training.','GGUF, GPTQ, AWQ, bitsandbytes, MLX 4/8-bit, CTranslate2 int8','MLX weights in the repo use bf16 (half precision). Not tested with lower bits.'],
+ ['Half precision (fp16 / bf16)',['llm','tts','stt'],['memory','speed'],'2× smaller than fp32','Almost none on modern chips','Use 16-bit numbers instead of 32-bit. The easiest first step.','torch dtype, autocast',''],
+ ['KV cache',['llm','tts'],['speed'],'Large; turns n² work into n','Memory grows with context','Keep attention data of past tokens. Already on by default in most libraries.','transformers, vLLM, mlx-lm',''],
+ ['KV cache quantization / sliding window',['llm'],['memory'],'2–4× less cache memory','Small loss on long context','Store the cache in 8 or 4 bits, or keep only the last N tokens.','vLLM, llama.cpp, mlx-lm',''],
+ ['FlashAttention',['llm','tts','stt'],['speed','memory'],'2–4× faster attention on long input','None in quality; needs a supported GPU','A faster way to compute attention that avoids big temporary matrices.','flash-attn, torch SDPA',''],
+ ['Paged attention + continuous batching',['llm'],['speed'],'2–20× more throughput on a server','Needs a serving engine; not for one user','Serve many requests at once. New requests join the batch at every token.','vLLM, TGI, SGLang',''],
+ ['Speculative decoding',['llm','tts','stt'],['speed','latency'],'1.5–3× faster tokens','Needs a second small model; same output','A small model guesses several tokens. The big model checks them in one step.','vLLM, llama.cpp, Whisper assisted decoding',''],
+ ['Prompt / prefix caching',['llm'],['latency','speed'],'Skips repeated prompt work','Memory for stored prefixes','Reuse the work done on a long system prompt or chat history.','vLLM, llama.cpp, Claude/OpenAI APIs',''],
+ ['Constrained / structured output',['llm'],['quality'],'Valid JSON every time','Slight slowdown','Only allow tokens that match a grammar or schema.','outlines, llama.cpp grammars, JSON mode',''],
+ ['LoRA / QLoRA fine-tune',['llm','tts','stt'],['quality'],'Model fits your domain, voice or accent','Needs data and a GPU for hours','Train small add-on matrices. Base weights stay frozen. Files are tens of MB.','peft, mlx-lm lora',''],
+ ['Distillation',['llm','tts','stt'],['speed','memory'],'3–10× smaller; Distil-Whisper ≈ 6× faster','Training cost; some quality loss','Train a small "student" to copy a big "teacher".','Distil-Whisper, DistilBERT',''],
+ ['Mixture of experts',['llm'],['speed'],'Big-model quality at lower compute per token','Needs a lot of memory','Use only a few expert sub-networks for each token.','Mixtral, Qwen-MoE',''],
+ ['RAG',['llm'],['quality'],'Fewer wrong facts; fresh data','Extra search step adds delay','Find documents and place them in the prompt.','vector databases, embeddings',''],
+ ['Smaller model or other size',['llm','tts','stt'],['speed','memory'],'Often the biggest gain at no cost','Lower peak quality','Choose 0.6B instead of 1.7B, or Kokoro instead of a large model.','','Each engine here has size choices (see <code>ModelConfig</code>).'],
+ ['Apple MLX / native port',['llm','tts','stt'],['speed','memory'],'Reported 7–9× faster for Chatterbox on a Mac (repo comment)','Mac only; extra code per engine','Run on the Apple GPU with the MLX library, not on CPU.','mlx, mlx-audio, mlx-lm','Yes: <code>mlx_backend.py</code>, <code>chatterbox_mlx_backend.py</code>.'],
+ ['torch.compile / CUDA graphs',['llm','tts','stt'],['speed'],'1.2–2× for small steps','Slow first run; fragile with new models','Compile the model into faster kernels and remove launch overhead.','torch.compile, CUDA graphs',''],
+ ['ONNX / TensorRT / Core ML',['tts','stt','llm'],['speed','memory'],'1.5–5× on the target chip','Build step for each device','Convert to a graph format and compile it for one runtime.','onnxruntime, TensorRT, coremltools',''],
+ ['CTranslate2 (faster-whisper)',['stt'],['speed','memory'],'About 4× faster than plain Whisper code','Whisper only','A fast C++ engine for Whisper with int8 support.','faster-whisper',''],
+ ['Turbo / pruned decoder',['stt'],['speed'],'About 8× faster than large-v3, small WER loss','Slightly weaker on rare languages','Whisper turbo keeps the big encoder but uses a much smaller decoder.','whisper-large-v3-turbo','Default STT model in the repo is <code>whisper-turbo</code>.'],
+ ['VAD gating',['stt'],['speed','quality'],'Skips silence; fewer made-up words','A small extra model','Run only on audio where someone speaks. Also marks the end of a sentence.','Silero VAD, WebRTC VAD',''],
+ ['Chunked long-form + batching',['stt'],['speed'],'Several times faster on long files','Edges between chunks can cut words','Cut long audio into windows and decode many windows at once.','HF pipeline chunking, WhisperX',''],
+ ['Streaming decoders',['stt'],['latency'],'Text while the user still speaks','Interim text may change (rolling) or needs a special model (native)','Use rolling windows, chunked attention, or transducer / native streaming models.','Voxtral Realtime, RNN-T','Yes: segmented, rolling and native adapters (<code>stt_streaming.py</code>).'],
+ ['Fix the language, bias the words',['stt'],['quality'],'Lower WER on names and jargon','Needs a word list','Set the language. Give a prompt or hot-word list.','Whisper initial prompt, hotwords',''],
+ ['Forced alignment / timestamps',['stt'],['quality'],'Exact word times for captions','Extra model','Match text to audio to get timing for each word.','WhisperX, MFA',''],
+ ['Sentence chunking + overlap',['tts'],['latency','quality'],'First sentence plays sooner; fewer long-text errors','Small joins between pieces','Cut text at sentence ends. Make audio for each part. Play in order.','Any TTS',''],
+ ['Streaming audio decode',['tts'],['latency'],'First audio in a few hundred ms','Needs an engine that supports chunks','Decode codec tokens in small groups and send them at once.','Qwen3-TTS, Chatterbox streaming','Yes: streaming TTS and <code>mlx_icl_stream.py</code>.'],
+ ['Fewer steps (flow / diffusion)',['tts'],['speed'],'4–10× fewer steps','Some quality loss','Distill or use a solver that needs only a few steps.','F5-TTS, consistency models',''],
+ ['Low frame-rate codec',['tts'],['speed'],'Fewer tokens to predict for each second','Needs a codec trained for it','Use a codec with 12 or 25 tokens per second, not 75.','Mimi, Qwen 12Hz codec','Qwen models here are named "12Hz".'],
+ ['Voice prompt cache',['tts'],['latency'],'No re-analysis of the same clip','Disk or memory','Store the processed reference voice and reuse it.','','Yes: <code>create_voice_prompt(use_cache)</code> returns <code>was_cached</code>.'],
+ ['Trim and runaway guard',['tts'],['quality'],'Removes trailing hiss and endless audio','Extra logic','Cut silence and noise at the end. Retry the text in smaller pieces if the model does not stop.','','Yes: <code>needs_trim</code>, <code>retries_runaway</code>.'],
+ ['Keep warm / unload idle',['llm','tts','stt'],['latency','memory'],'No load time per request; free memory when idle','Memory use while loaded','Load once and reuse. Unload engines you do not use. Run one warm-up call.','','Yes: <code>unload_model</code>, <code>empty_device_cache</code>, factory cache.'],
+ ['Fast loading (mmap, safetensors)',['llm','tts','stt'],['latency'],'Seconds instead of minutes','None','Map weights from disk without a copy. Use a local cache.','safetensors, HF offline mode','Yes: offline-first HF cache check.'],
+ ['Remote offload',['llm'],['memory','quality'],'Use a bigger model than your machine can hold','Network delay, cost, privacy','Send the call to a hosted model with the same API.','OpenAI-compatible servers','Yes: <code>openai_compat</code> engine.']
+];
+const GOALS={all:'Any goal',speed:'Faster',memory:'Smaller',latency:'Sooner',quality:'Better output'};
+const TYPES={all:'All types',llm:'LLM',tts:'TTS',stt:'STT'};
+let opT='all',opG='all';
+$('#optType').innerHTML=Object.entries(TYPES).map(([k,v])=>`<button class="chip" data-k="${k}" aria-pressed="${k=='all'}">${v}</button>`).join('');
+$('#optGoal').innerHTML=Object.entries(GOALS).map(([k,v])=>`<button class="chip" data-k="${k}" aria-pressed="${k=='all'}">${v}</button>`).join('');
+function drawOp(){const r=OP.filter(o=>(opT==='all'||o[1].includes(opT))&&(opG==='all'||o[2].includes(opG)));
+ $('#optCount').textContent=r.length+' of '+OP.length+' options';
+ $('#optGrid').innerHTML=r.map(o=>`<details class="panel" style="margin:0"><summary style="cursor:pointer;font-weight:600">${o[0]}</summary>
+  <div class="row" style="margin:8px 0">${o[1].map(t=>`<span class="tag ${t}">${t.toUpperCase()}</span>`).join('')}${o[2].map(g=>`<span class="tag gen">${GOALS[g]}</span>`).join('')}</div>
+  <p style="margin:4px 0"><b>Gain:</b> ${o[3]}</p><p style="margin:4px 0"><b>Cost:</b> ${o[4]}</p><p style="margin:4px 0">${o[5]}</p>
+  ${o[6]?`<p style="margin:4px 0;color:var(--muted);font-size:14px">Tools: ${o[6]}</p>`:''}
+  ${o[7]?`<p style="margin:8px 0 0;font-size:14px"><span class="tag ${o[7].startsWith('Yes')?'stt':'gen'}">${o[7].startsWith('Yes')?'In this repo':'Repo note'}</span> ${o[7].replace(/^Yes: /,'')}</p>`:''}</details>`).join('')||'<p>No option matches. Change a filter.</p>'}
+pressGroup($('#optType'),b=>{opT=b.dataset.k;drawOp()});pressGroup($('#optGoal'),b=>{opG=b.dataset.k;drawOp()});drawOp();
+
+/* python */
+const PY={
+ 'Basics':['# A variable, a list, a dictionary\nname = "voicebox"\nvoices = ["af_heart", "bf_emma"]\nsettings = {"speed": 1.0, "lang": "en"}\n\n# A function. Indentation (4 spaces) is the block.\ndef greet(who, loud=False):\n    text = f"Hello {who}"\n    return text.upper() if loud else text\n\nfor v in voices:\n    print(greet(v))','Python has no braces. Spaces show the block. <code>f"…{x}"</code> puts a value in a string.'],
+ 'Imports & venv':['# Terminal: make and use a private environment\npython3.12 -m venv venv\nsource venv/bin/activate\npip install -r backend/requirements.txt\n\n# In code: use a library\nimport numpy as np\nfrom pathlib import Path','Always activate the venv before you run the code. Without it Python cannot see the libraries.'],
+ 'Classes':['class Engine:                      # a blueprint\n    def __init__(self, name):      # runs on creation\n        self.name = name\n        self.model = None          # not loaded yet\n\n    def load(self):\n        self.model = load_weights(self.name)\n\n    def run(self, text):\n        return self.model(text)\n\ne = Engine("kokoro")   # an object\ne.load()','<code>self</code> means "this object". The engines in <code>backends/</code> are classes with <code>load</code> and <code>generate</code> methods.'],
+ 'Protocol vs class':['from typing import Protocol, runtime_checkable\n\n# 1. Regular class: a real object with code inside\nclass KokoroEngine:\n    def generate(self, text: str) -> bytes:\n        return b"..."            # real work here\n\n# 2. Protocol: only a list of method shapes. No work inside.\n@runtime_checkable\nclass TTSBackend(Protocol):\n    def generate(self, text: str) -> bytes: ...\n    def is_loaded(self) -> bool: ...\n\n# 3. Engines do NOT inherit from the Protocol\nclass LuxEngine:                  # no (TTSBackend) here\n    def generate(self, text: str) -> bytes: return b"..."\n    def is_loaded(self) -> bool: return True\n\ndef speak(engine: TTSBackend):    # accepts any object with these methods\n    return engine.generate("hi")\n\nspeak(LuxEngine())                # OK: the shape matches\nisinstance(LuxEngine(), TTSBackend)   # True (runtime_checkable)\nTTSBackend()                      # TypeError: a Protocol cannot be created','<table style="min-width:0"><tr><th></th><th>Regular class</th><th>Abstract class (ABC)</th><th>Protocol</th></tr><tr><td>What it is</td><td>Code and data</td><td>A parent that forces children to fill in methods</td><td>A list of required methods (a contract)</td></tr><tr><td>Child must inherit?</td><td>Only if you want to reuse code</td><td>Yes</td><td><b>No</b>. A matching shape is enough (<i>structural typing</i>, or "duck typing")</td></tr><tr><td>Can create an object?</td><td>Yes</td><td>No, until the children fill in all methods</td><td>No</td></tr><tr><td>Missing method found</td><td>At the call (runtime error)</td><td>When you create the object</td><td>By the type checker (mypy, pyright) before you run; at runtime only at the call</td></tr><tr><td>Shares code</td><td>Yes</td><td>Yes</td><td>No (it only describes)</td></tr></table><ul style="margin-top:12px"><li>The <code>...</code> body means "no code here". It is a placeholder.</li><li><code>@runtime_checkable</code> lets you use <code>isinstance()</code>. It checks only that the method <b>names</b> exist. It does not check arguments or types.</li><li>Python does not stop a wrong engine at start-up. A missing method fails only when the code calls it. Run a type checker to catch it earlier.</li><li><b>Why this repo uses it:</b> in <code>backends/__init__.py</code>, <code>TTSBackend</code>, <code>STTBackend</code> and <code>LLMBackend</code> are Protocols. Engines like <code>KokoroTTSBackend</code> are plain classes with the right methods. A new engine file needs no import of the contract, so engine files stay independent. The cost: nothing forces a new engine to match, so there are no early errors.</li></ul>'],
+ 'async / await':['import asyncio\n\nasync def fetch_chunk(i):\n    await asyncio.sleep(0.1)      # wait without blocking others\n    return f"chunk {i}"\n\nasync def main():\n    chunks = await asyncio.gather(*(fetch_chunk(i) for i in range(3)))\n    print(chunks)\n\nasyncio.run(main())','<code>await</code> pauses this task and lets others run. A <code>yield</code> inside an <code>async def</code> makes a stream of chunks.'],
+ 'Tensors':['import torch\n\nx = torch.tensor([[1., 2.], [3., 4.]])   # a 2×2 grid of numbers\nprint(x.shape)                           # torch.Size([2, 2])\n\ndev = "cuda" if torch.cuda.is_available() else \\\n      "mps"  if torch.backends.mps.is_available() else "cpu"\nx = x.to(dev)                            # move to the GPU\n\nwith torch.no_grad():                    # inference: no learning\n    y = x @ x                            # matrix multiply','A <b>tensor</b> is an n-dimensional grid of numbers. Models are made of tensors. A shape bug is the most common error.'],
+ 'Web API':['from fastapi import FastAPI\nfrom fastapi.responses import StreamingResponse\n\napp = FastAPI()\n\n@app.post("/tts")\nasync def tts(req: dict):\n    def audio_chunks():\n        for pcm in engine.stream(req["text"]):\n            yield pcm                  # sent as soon as ready\n    return StreamingResponse(audio_chunks(), media_type="audio/wav")','The <code>@app.post</code> line is a <b>decorator</b>. It links a URL to a function. Your <code>routes/</code> folder is full of these.']
+};
+$('#pyTabs').innerHTML=Object.keys(PY).map((k,i)=>`<button class="chip" aria-pressed="${i==0}">${k}</button>`).join('');
+function drawPy(k){const [c,n]=PY[k];$('#pyBody').innerHTML=`<pre style="margin-top:0">${esc(c)}</pre><div class="tablewrap" style="border:0;background:none">${n.startsWith('<table')?n:`<p style="margin-bottom:0">${n}</p>`}</div>`}
+pressGroup($('#pyTabs'),b=>drawPy(b.textContent));drawPy('Basics');
+
+/* scratch */
+const SC={
+ 'LLM':['# pip install transformers torch accelerate\nfrom transformers import AutoTokenizer, AutoModelForCausalLM\nimport torch\n\nname = "Qwen/Qwen2.5-0.5B-Instruct"       # small, runs on a laptop\ntok = AutoTokenizer.from_pretrained(name)\nmodel = AutoModelForCausalLM.from_pretrained(name, torch_dtype=torch.float16)\n\nmsgs = [{"role": "user", "content": "Say hi in 5 words."}]\nids = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt")\nout = model.generate(ids, max_new_tokens=30, do_sample=True, temperature=0.7)\nprint(tok.decode(out[0][ids.shape[1]:], skip_special_tokens=True))','On a Mac, try <code>mlx-lm</code> for speed. To stream tokens, pass a <code>TextIteratorStreamer</code>.'],
+ 'STT':['# pip install faster-whisper\nfrom faster_whisper import WhisperModel\n\nmodel = WhisperModel("small", device="cpu", compute_type="int8")\nsegments, info = model.transcribe("speech.wav")\nprint("Language:", info.language)\nfor s in segments:               # a generator: text arrives piece by piece\n    print(f"[{s.start:.1f}-{s.end:.1f}] {s.text}")','Use a 16 kHz mono WAV. For live audio, cut the stream at silence (VAD), then send each part.'],
+ 'TTS':['# pip install kokoro soundfile\nfrom kokoro import KPipeline\nimport soundfile as sf\n\npipe = KPipeline(lang_code="a")           # "a" = American English\nfor i, (gs, ps, audio) in enumerate(pipe("Hello from my first voice app.", voice="af_heart")):\n    sf.write(f"out_{i}.wav", audio, 24000)  # 24 kHz','The loop gives one audio piece per sentence. That is basic streaming. Check the Kokoro page for the current API.'],
+ 'All three':['# Pseudo-code for a voice loop\nwhile True:\n    audio = mic.read_until_silence()          # VAD\n    text  = stt.transcribe(audio)             # speech → text\n    reply = ""\n    for token in llm.stream(history + text):  # text → text\n        reply += token\n        if reply.endswith((".", "?", "!")):\n            speaker.play(tts.synthesize(reply))   # text → speech\n            reply = ""','Real systems run each stage as an async task with queues, and cancel them when the user interrupts.']
+};
+$('#scTabs').innerHTML=Object.keys(SC).map((k,i)=>`<button class="btn" aria-pressed="${i==0}">${k}</button>`).join('');
+function drawSc(k){$('#scCode').textContent=SC[k][0];$('#scNote').innerHTML=SC[k][1]}
+pressGroup($('#scTabs'),b=>drawSc(b.textContent));drawSc('LLM');
+const PATH=['Run the three examples above on your CPU. Look at the output.','Put one behind a FastAPI route. Call it with curl.','Stream the output (chunks, not one big reply).','Load the model once at start-up. Add a lock or queue.','Join STT → LLM → TTS with async queues and VAD.','Add barge-in: cancel work when the user speaks.','Measure: RTF, time to first audio, WER. Then tune and quantize.'];
+$('#path').innerHTML=PATH.map((p,i)=>`<label class="step" style="color:var(--fg);cursor:pointer"><input type="checkbox" id="pt${i}" style="margin-top:6px"><span>${p}</span></label>`).join('');
+
+/* glossary */
+const GL=[['token','A piece of text (about ¾ of a word) or a piece of audio, as an integer. Models read and write tokens.'],['tokenizer','Converts text to tokens and back.'],['parameter / weight','One learned number inside the model. "7B" means 7 billion of them.'],['transformer','The main network design. Uses attention.'],['attention','Lets each token look at all other tokens and weigh them.'],['embedding','A list of numbers that stands for a token or a sound. Close meanings give close lists.'],['logits','Raw scores for each possible next token, before probabilities.'],['softmax','Maths that turns logits into probabilities that add up to 1.'],['temperature','Sampling setting. Low = safe, high = random.'],['top-p / top-k','Sampling filters that keep only the likely tokens.'],['KV cache','Stored attention data for past tokens, so they are not computed again.'],['context window','The maximum number of tokens a model can see at once.'],['quantization','Store weights in fewer bits (for example 4) to save memory and time.'],['LoRA','Cheap fine-tune: train small add-on matrices, keep the base model frozen.'],['fine-tuning','More training of a ready model on your own data.'],['inference','Running a trained model to get an output.'],['forward pass','One run of data through the network.'],['epoch / loss / gradient','Training words: one pass over the data / how wrong the model is / the direction to change weights.'],['WER','Word error rate for STT. Lower is better. 5% is good.'],['MOS','Mean opinion score. People rate TTS from 1 to 5.'],['RTF','Real-time factor: compute time ÷ audio time.'],['VAD','Voice activity detection. Finds speech and silence.'],['mel spectrogram','Picture of sound: time on one axis, pitch on the other.'],['vocoder','Network that turns a spectrogram into a waveform.'],['neural codec','Compresses audio into tokens and back (EnCodec, SNAC, Mimi).'],['sample rate','Audio samples each second. 16 kHz = 16,000.'],['PCM','Raw audio samples as numbers.'],['phoneme','A basic speech sound. TTS often turns text into phonemes first.'],['zero-shot cloning','Copy a voice from a short sample, with no training.'],['diffusion','Make data by removing noise in many steps.'],['flow matching','Like diffusion, with a straighter path, so fewer steps.'],['GAN','Two networks compete: one makes, one judges. Used in vocoders.'],['batching','Process many inputs in one model call.'],['continuous batching','LLM server adds and removes requests from the batch at each token.'],['speculative decoding','A small model guesses tokens; the big model checks them at once.'],['RAG','Retrieval-augmented generation: find documents, put them in the prompt.'],['hallucination','The model states false things as if they were true.'],['GIL','Python lock: one thread runs Python code at a time.'],['dtype','Number type: float32, float16, bfloat16, int8.'],['device','Where tensors live: cpu, cuda, mps.'],['OOM','Out of memory. Use a smaller model, lower bits, or a shorter context.'],['Hugging Face','Hub for models and the <code>transformers</code> library.'],['transformers / diffusers','Hugging Face libraries to load and run models.'],['vLLM / llama.cpp / Ollama','Fast LLM servers and runtimes.'],['WebRTC','Browser technology for real-time audio between a client and a server. Used by LiveKit.'],['barge-in','The user speaks while the assistant talks; the assistant must stop.']];
+function drawGl(q){q=q.toLowerCase();$('#gList').innerHTML=GL.filter(([k,v])=>!q||(k+' '+v).toLowerCase().includes(q)).map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')||'<dt>No match</dt><dd>Try another word.</dd>'}
+$('#gSearch').oninput=e=>drawGl(e.target.value);drawGl('');
+</script>
+
+</body>
+</html>

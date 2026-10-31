@@ -1,7 +1,7 @@
 """
 Streaming STT: 1 interface for all STT models, with an adapter per model.
 
-Design: ``docs/research/stt-streaming-design.md`` sections 3-7.
+Design: ``docs-internal/research/stt-streaming-design.md`` sections 3-7.
 
 Layers::
 

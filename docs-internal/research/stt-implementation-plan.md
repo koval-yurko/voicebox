@@ -1,7 +1,7 @@
 # STT implementation plan: multi-engine STT, Qwen3-ASR, streaming interface
 
 Date: 2026-10-28. Base commit: `3abe9e1`.
-Inputs: `docs/research/stt-investigation.md` (sections 7-8), `docs/research/stt-streaming-design.md`.
+Inputs: `docs-internal/research/stt-investigation.md` (sections 7-8), `docs-internal/research/stt-streaming-design.md`.
 Target: Apple Silicon Mac, MLX, LiveKit agent on the same Mac (loopback).
 
 ## 0. Overview
@@ -254,7 +254,7 @@ Commands:
 
 ## Phase 2 — Generic streaming interface
 
-Full design: `docs/research/stt-streaming-design.md` sections 3-7.
+Full design: `docs-internal/research/stt-streaming-design.md` sections 3-7.
 
 ### Steps
 

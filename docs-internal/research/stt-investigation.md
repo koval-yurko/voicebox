@@ -95,7 +95,7 @@ Voicebox STT does not support streaming now. Whisper is a 30 s window encoder-de
 2. **Rolling window re-decode.** Transcribe the growing buffer every 300-500 ms and send interim text. When VAD detects the end, send the final text. This works with Whisper (LocalAgreement, as in `whisper_streaming`), but it uses much more GPU.
 3. **Native streaming model.** Kyutai STT or Parakeet in cache-aware or chunked mode emit tokens as audio arrives.
 
-The detailed streaming design (generic interface, per-model adapters, Qwen3-ASR incremental decode, Voxtral Realtime) is in `docs/research/stt-streaming-design.md`.
+The detailed streaming design (generic interface, per-model adapters, Qwen3-ASR incremental decode, Voxtral Realtime) is in `docs-internal/research/stt-streaming-design.md`.
 
 The plan in `docs/plans/VOICE_IO.md:239` already describes a `/transcribe/stream` WebSocket: "Audio frames flow in, partial transcripts stream back". The `/tts/ws` route (`backend/routes/tts_stream.py:297`) is a good template for the protocol and for client disconnect and lock handling.
 

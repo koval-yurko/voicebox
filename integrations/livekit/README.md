@@ -2,7 +2,7 @@
 
 Local STT and TTS for [LiveKit Agents](https://docs.livekit.io/agents/) 1.8+, through a Voicebox server on the same Mac:
 
-- `VoiceboxSTT`: streaming STT over `WS /stt/ws` (protocol: `docs/research/stt-streaming-design.md` sections 7 and 8).
+- `VoiceboxSTT`: streaming STT over `WS /stt/ws` (protocol: `docs-internal/research/stt-streaming-design.md` sections 7 and 8).
 - `VoiceboxTTS`: streaming TTS over `WS /tts/ws`.
 
 The agent connects over loopback (`127.0.0.1`), so the API key gate for external `/tts/*` requests does not apply.
