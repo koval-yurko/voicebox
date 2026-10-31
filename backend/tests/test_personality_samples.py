@@ -12,11 +12,8 @@ empty output) trip heuristic flags. A human still reads the final
 column.
 
 Usage:
-    # Backend server must be running.
+    # Backend server must be running, with an LLM endpoint set in Settings > Captures.
     python backend/tests/test_personality_samples.py
-
-    # Test just one model size:
-    python backend/tests/test_personality_samples.py --model 4B
 
     # Dump JSON for diffing against a prior run:
     python backend/tests/test_personality_samples.py --json out.json
@@ -285,28 +282,18 @@ def format_report(cards: list[Scorecard]) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--port", type=int, default=None)
-    ap.add_argument("--model", choices=("0.6B", "1.7B", "4B"), action="append")
     ap.add_argument("--json", type=Path, default=None)
     args = ap.parse_args()
 
-    models = tuple(args.model) if args.model else ("0.6B", "4B")
+    models = ("endpoint",)  # the custom endpoint picks the model
     port = detect_backend_port(args.port)
     print(f"backend → http://127.0.0.1:{port}")
     print(f"personalities → {len(PERSONALITIES)}, models → {models}")
 
-    # Model size is set on the capture_settings singleton, not passed
-    # per-request to /profiles/{id}/compose. The harness swaps it
-    # between runs so we probe both sizes cleanly.
     cards: list[Scorecard] = []
     with httpx.Client() as client:
         for model in models:
             print(f"\n── {model} " + "─" * (80 - len(model) - 4))
-            # Flip the server-side default LLM size for this pass.
-            client.put(
-                f"http://127.0.0.1:{port}/settings/captures",
-                json={"llm_model": model},
-                timeout=10.0,
-            )
             for personality in PERSONALITIES:
                 print(f"  [{personality.name}] ", end="", flush=True)
                 profile_id = create_throwaway_profile(client, port, personality, model)

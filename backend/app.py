@@ -107,7 +107,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__, config, database
-from .services import tts, transcribe, llm
+from .services import tts, transcribe
 from .database import get_db
 from .utils.platform_detect import get_backend_type
 from .utils.progress import get_progress_manager
@@ -375,10 +375,6 @@ async def _run_shutdown() -> None:
         transcribe.unload_whisper_model()
     except Exception:
         logger.exception("Failed to unload Whisper model")
-    try:
-        llm.unload_llm_model()
-    except Exception:
-        logger.exception("Failed to unload LLM model")
 
 
 app = create_app()

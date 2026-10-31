@@ -48,8 +48,7 @@ def test_mlx_audio_stt_entry_point():
 
 
 def test_mlx_lm_entry_points():
-    """`mlx_lm.load` / `mlx_lm.generate` — used by qwen_llm_backend."""
-    from mlx_lm import generate, load
+    """`mlx_lm.models.cache` — used by the Voxtral streaming adapter."""
+    from mlx_lm.models.cache import RotatingKVCache
 
-    assert callable(load)
-    assert callable(generate)
+    assert callable(RotatingKVCache)

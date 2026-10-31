@@ -30,7 +30,7 @@
     "noTranscriptError": "L'acquisizione non ha ancora una trascrizione",
     "captureCardLabel": "Acquisizione · {{when}}",
     "header": {
-      "modelSummary": "Whisper {{stt}} · Qwen3 · {{llm}}"
+      "modelSummary": "Whisper {{stt}} · {{llm}}"
     },
     "source": {
       "dictation": "Dettatura",
@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "Perfezionata",
       "raw": "Grezza",
-      "refinedHint": "Perfezionata con Qwen3 · {{model}}",
+      "refinedHint": "Perfezionata con {{model}}",
       "rawHint": "Trascritto con Whisper {{model}}"
     },
     "actions": {
@@ -126,12 +126,6 @@
         "ready": "Modello scaricato.",
         "missing": "Necessario per trascrivere il tuo audio",
         "missingWithSize": "Necessario per trascrivere il tuo audio · {{size}}"
-      },
-      "llm": {
-        "label": "{{name}} (perfezionamento)",
-        "ready": "Modello scaricato.",
-        "missing": "Sistemazione della trascrizione grezza prima dell'incollo",
-        "missingWithSize": "Sistemazione della trascrizione grezza prima dell'incollo · {{size}}"
       },
       "inputMonitoring": {
         "label": "Permesso Monitoraggio input",
@@ -280,8 +274,7 @@
       "defaultEffects": "Effetti predefiniti",
       "defaultEffectsHint": "Effetti applicati automaticamente a tutte le nuove generazioni con questa voce.",
       "personalityLabel": "Personalità",
-      "personalityPlaceholder": "es. \"un pirata scontroso che parla solo con metafore marinaresche\"",
-      "personalityHint": "Chi è questa voce e come parla. Guida il pulsante Componi e l'opzione di riscrittura nel personaggio nella pagina di generazione. Lascia vuoto per nasconderli entrambi."
+      "personalityPlaceholder": "es. \"un pirata scontroso che parla solo con metafore marinaresche\""
     },
     "avatar": {
       "alt": "Anteprima avatar"
@@ -973,22 +966,9 @@
       },
       "refinement": {
         "title": "Perfezionamento",
-        "description": "Esegui facoltativamente un modello linguistico locale (LLM) sulle trascrizioni per rimuovere intercalari, correggere la punteggiatura e le autocorrezioni.",
         "auto": {
           "title": "Perfeziona automaticamente le trascrizioni",
           "description": "Viene eseguito dopo ogni acquisizione. Puoi comunque passare dalla versione grezza a quella perfezionata nella scheda Acquisizioni."
-        },
-        "model": {
-          "title": "Modello di perfezionamento",
-          "description": "I modelli più grandi sono più lenti ma gestiscono meglio le sottili autocorrezioni e il vocabolario tecnico.",
-          "size06": "Qwen3 · 0.6B · 400 MB · {{tail}}",
-          "size17": "Qwen3 · 1.7B · 1.1 GB · {{tail}}",
-          "size40": "Qwen3 · 4B · 2.5 GB · {{tail}}",
-          "tail": {
-            "veryFast": "Molto veloce",
-            "fast": "Veloce",
-            "fullQuality": "Massima qualità"
-          }
         },
         "smartCleanup": {
           "title": "Pulizia intelligente",
@@ -1036,8 +1016,7 @@
         "aboutBody": "Tieni premuta una scorciatoia in qualsiasi punto del tuo computer, parla e Voicebox trasformerà la tua voce in testo. Riproducilo con qualsiasi voce clonata, incollalo in qualsiasi app o invialo direttamente al tuo agente di programmazione.",
         "differencesTitle": "Cosa cambia",
         "local": {
-          "title": "Interamente locale.",
-          "body": "Whisper e il modello LLM di perfezionamento vengono eseguiti sull'hardware del tuo computer. Nessun cloud, nessun account, la tua voce non lascia mai la macchina."
+          "title": "Interamente locale."
         },
         "playAs": {
           "title": "Riproduci con qualsiasi voce.",
@@ -1210,8 +1189,7 @@
     "unknownSize": "Dimensione sconosciuta",
     "sections": {
       "voiceGeneration": "Generazione vocale",
-      "transcription": "Trascrizione",
-      "languageModels": "Modelli linguistici"
+      "transcription": "Trascrizione"
     },
     "status": {
       "loaded": "Caricato"

@@ -93,12 +93,6 @@ const MODEL_DESCRIPTIONS: Record<string, string> = {
     'Qwen3-ASR 1.7B by Alibaba (8-bit, 2.5 GB). Recommended for languages other than English: close to Whisper Turbo on German and Russian. Supports 30 languages. Runs on the Apple Silicon GPU through MLX.',
   'voxtral-realtime-4B':
     'Voxtral Mini 4B Realtime by Mistral AI (4-bit, 3.1 GB). Built for live streaming: text arrives about 0.5 s after the speech, and earlier text never changes. Uses the GPU all the time while it streams, so use it only when Qwen3-ASR streaming is not good enough. 13 languages, detected automatically.',
-  'qwen3-0.6b':
-    'Qwen3 0.6B — smallest of the Qwen3 instruct family. Very fast on CPU, runs at ~400 MB quantized on Apple Silicon. Good for dictation refinement and short completions.',
-  'qwen3-1.7b':
-    'Qwen3 1.7B — balanced size and quality. Handles subtle self-corrections and technical vocabulary better than the 0.6B. Runs at ~1.1 GB quantized on Apple Silicon.',
-  'qwen3-4b':
-    'Qwen3 4B — highest quality local refinement and longer-form reasoning. ~2.5 GB quantized on Apple Silicon, ~8 GB at full precision on PyTorch.',
 };
 
 function formatDownloads(n: number): string {
@@ -435,13 +429,11 @@ export function ModelManagement() {
         m.model_name.startsWith('qwen-asr') ||
         m.model_name.startsWith('voxtral'),
     ) ?? [];
-  const llmModels = modelStatus?.models.filter((m) => m.model_name.startsWith('qwen3-')) ?? [];
 
   // Build sections
   const sections: { label: string; models: ModelStatus[] }[] = [
     { label: t('models.sections.voiceGeneration'), models: voiceModels },
     { label: t('models.sections.transcription'), models: sttModels },
-    { label: t('models.sections.languageModels'), models: llmModels },
   ];
 
   // Get detail modal state for selected model

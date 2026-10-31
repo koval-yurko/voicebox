@@ -3,13 +3,10 @@
 import logging
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
 
 from .. import models
-from ..backends import get_llm_model_configs
+from ..backends import LLMNotConfiguredError
 from ..services import llm
-from ..services.task_queue import create_background_task
-from ..utils.tasks import get_task_manager
 
 logger = logging.getLogger(__name__)
 
@@ -18,54 +15,15 @@ router = APIRouter()
 
 @router.post("/llm/generate", response_model=models.LLMGenerateResponse)
 async def llm_generate(request: models.LLMGenerateRequest):
-    """Run a single-turn chat completion via the active LLM backend.
+    """Run a single-turn chat completion on the custom OpenAI-compatible endpoint.
 
-    Routes to the built-in Qwen3 backend by default. If the user has
-    configured a custom OpenAI-compatible endpoint under capture settings,
-    ``get_llm_model()`` returns that backend and the Qwen-specific size
-    validation / download-progress plumbing below is skipped.
+    There is no built-in LLM: without an endpoint in capture settings this
+    returns 400.
     """
-    from ..backends.openai_compat_backend import OpenAICompatLLMBackend
-
-    backend = llm.get_llm_model()
-
-    if isinstance(backend, OpenAICompatLLMBackend):
-        # Custom endpoint owns model selection. The remote server validates
-        # its own model name and there's nothing to download locally.
-        model_size = backend.model_size
-    else:
-        model_size = request.model_size or backend.model_size
-
-        valid_sizes = {cfg.model_size for cfg in get_llm_model_configs()}
-        if model_size not in valid_sizes:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid LLM size '{model_size}'. Must be one of: {sorted(valid_sizes)}",
-            )
-
-        already_loaded = backend.is_loaded() and backend.model_size == model_size
-        if not already_loaded and not backend._is_model_cached(model_size):
-            progress_model_name = f"qwen3-{model_size.lower()}"
-            task_manager = get_task_manager()
-
-            async def download_llm_background():
-                try:
-                    await backend.load_model(model_size)
-                    task_manager.complete_download(progress_model_name)
-                except Exception as e:
-                    task_manager.error_download(progress_model_name, str(e))
-
-            task_manager.start_download(progress_model_name)
-            create_background_task(download_llm_background())
-
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "message": f"Qwen3 {model_size} is being downloaded. Please wait and try again.",
-                    "model_name": progress_model_name,
-                    "downloading": True,
-                },
-            )
+    try:
+        backend = llm.get_llm_model()
+    except LLMNotConfiguredError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     examples: list[tuple[str, str]] | None = None
     if request.examples:
@@ -83,21 +41,17 @@ async def llm_generate(request: models.LLMGenerateRequest):
             system=request.system,
             max_tokens=request.max_tokens,
             temperature=request.temperature,
-            model_size=model_size,
             examples=examples,
         )
-        return models.LLMGenerateResponse(text=text, model_size=model_size)
+        return models.LLMGenerateResponse(text=text, model_size=backend.model_size)
     except RuntimeError as e:
-        if isinstance(backend, OpenAICompatLLMBackend):
-            # The remote backend raises a deliberately short message naming
-            # the endpoint and status (no local paths), so the UI can show
-            # the user what to fix.
-            logger.error("Custom LLM endpoint failed: %s", e)
-            raise HTTPException(status_code=502, detail=str(e)) from e
-        logger.exception("LLM generate failed")
-        raise HTTPException(status_code=500, detail="LLM generation failed") from e
+        # The remote backend raises a deliberately short message naming
+        # the endpoint and status (no local paths), so the UI can show
+        # the user what to fix.
+        logger.error("Custom LLM endpoint failed: %s", e)
+        raise HTTPException(status_code=502, detail=str(e)) from e
     except Exception as e:
-        # The backend exception text can include filesystem paths and stack
-        # frames — log it server-side and hand the client a generic message.
+        # The backend exception text can include stack frames — log it
+        # server-side and hand the client a generic message.
         logger.exception("LLM generate failed")
         raise HTTPException(status_code=500, detail="LLM generation failed") from e

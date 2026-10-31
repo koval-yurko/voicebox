@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 import pytest
 
 from backend.backends import (
+    LLMNotConfiguredError,
     get_llm_backend,
     reset_backends,
     set_llm_config,
@@ -159,8 +160,8 @@ async def test_dispatch_returns_openai_compat_when_config_set():
     assert backend.model == _model()
 
 
-async def test_dispatch_reverts_when_config_cleared():
-    """Clearing the endpoint falls back to the on-device Qwen path."""
+async def test_dispatch_raises_when_config_cleared():
+    """Clearing the endpoint turns the LLM off: there is no built-in fallback."""
     set_llm_config(
         endpoint=_endpoint(),
         model=_model(),
@@ -169,8 +170,8 @@ async def test_dispatch_reverts_when_config_cleared():
     assert isinstance(get_llm_backend(), OpenAICompatLLMBackend)
 
     set_llm_config(endpoint=None, model=None, api_key=None)
-    fallback = get_llm_backend()
-    assert not isinstance(fallback, OpenAICompatLLMBackend)
+    with pytest.raises(LLMNotConfiguredError):
+        get_llm_backend()
 
 
 async def test_dispatch_rebuilds_when_endpoint_changes():

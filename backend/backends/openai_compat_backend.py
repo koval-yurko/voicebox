@@ -9,8 +9,8 @@ server is expected to serve the model.
 
 The user configures ``custom_llm_endpoint`` / ``custom_llm_model`` /
 ``custom_llm_api_key`` in capture settings; when the endpoint is set,
-``get_llm_backend()`` returns an instance of this class instead of the
-built-in Qwen3 backend.
+``get_llm_backend()`` returns an instance of this class. There is no
+built-in LLM, so without an endpoint the LLM features are off.
 """
 
 import logging

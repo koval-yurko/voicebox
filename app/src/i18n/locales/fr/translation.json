@@ -30,7 +30,7 @@
     "noTranscriptError": "Cette capture n'a pas encore de transcription",
     "captureCardLabel": "Capture · {{when}}",
     "header": {
-      "modelSummary": "Whisper {{stt}} · Qwen3 · {{llm}}"
+      "modelSummary": "Whisper {{stt}} · {{llm}}"
     },
     "source": {
       "dictation": "Dictée",
@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "Corrigé",
       "raw": "Brut",
-      "refinedHint": "Corrigé avec Qwen3 · {{model}}",
+      "refinedHint": "Corrigé avec {{model}}",
       "rawHint": "Transcrit avec Whisper {{model}}"
     },
     "actions": {
@@ -126,12 +126,6 @@
         "ready": "Modèle téléchargé.",
         "missing": "Nécessaire pour transcrire votre audio",
         "missingWithSize": "Nécessaire pour transcrire votre audio · {{size}}"
-      },
-      "llm": {
-        "label": "{{name}} (correction)",
-        "ready": "Modèle téléchargé.",
-        "missing": "Nettoie la transcription brute avant collage",
-        "missingWithSize": "Nettoie la transcription brute avant collage · {{size}}"
       },
       "inputMonitoring": {
         "label": "Autorisation de surveillance d'entrée",
@@ -280,8 +274,7 @@
       "defaultEffects": "Effets par défaut",
       "defaultEffectsHint": "Effets appliqués automatiquement à toutes les nouvelles générations avec cette voix.",
       "personalityLabel": "Personnalité",
-      "personalityPlaceholder": "ex. « un pirate grincheux qui ne parle qu'en métaphores maritimes »",
-      "personalityHint": "Qui est cette voix et comment elle parle. Contrôle le bouton Composer et le bouton d'écriture dans le personnage sur la page de génération. Laissez vide pour masquer les deux."
+      "personalityPlaceholder": "ex. « un pirate grincheux qui ne parle qu'en métaphores maritimes »"
     },
     "avatar": {
       "alt": "Aperçu de l'avatar"
@@ -973,22 +966,9 @@
       },
       "refinement": {
         "title": "Correction",
-        "description": "Optionnellement, exécutez un LLM local sur les transcriptions pour nettoyer les mots de remplissage, la ponctuation et les auto-corrections.",
         "auto": {
           "title": "Corriger automatiquement les transcriptions",
           "description": "S'exécute après chaque capture. Vous pouvez toujours basculer entre brut et corrigé dans l'onglet Captures."
-        },
-        "model": {
-          "title": "Modèle de correction",
-          "description": "Les modèles plus grands sont plus lents mais gèrent mieux les auto-corrections subtiles et le vocabulaire technique.",
-          "size06": "Qwen3 · 0,6B · 400 Mo · {{tail}}",
-          "size17": "Qwen3 · 1,7B · 1,1 Go · {{tail}}",
-          "size40": "Qwen3 · 4B · 2,5 Go · {{tail}}",
-          "tail": {
-            "veryFast": "Très rapide",
-            "fast": "Rapide",
-            "fullQuality": "Qualité optimale"
-          }
         },
         "smartCleanup": {
           "title": "Nettoyage intelligent",
@@ -1036,8 +1016,7 @@
         "aboutBody": "Maintenez un raccourci n'importe où sur votre machine, parlez, et Voicebox transforme votre voix en texte. Rejouez-la avec n'importe quelle voix clonée, collez-la dans n'importe quelle application, ou transmettez-la à votre agent de codage.",
         "differencesTitle": "Ce qui est différent",
         "local": {
-          "title": "Entièrement local.",
-          "body": "Whisper et le LLM de correction fonctionnent sur votre matériel. Pas de cloud, pas de comptes, votre voix ne quitte jamais votre machine."
+          "title": "Entièrement local."
         },
         "playAs": {
           "title": "Lire avec n'importe quelle voix.",
@@ -1182,8 +1161,7 @@
     "unknownSize": "Taille inconnue",
     "sections": {
       "voiceGeneration": "Génération vocale",
-      "transcription": "Transcription",
-      "languageModels": "Modèles de langage"
+      "transcription": "Transcription"
     },
     "status": {
       "loaded": "Chargé"

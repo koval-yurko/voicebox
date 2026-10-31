@@ -30,7 +30,7 @@
     "noTranscriptError": "La captura aún no tiene transcripción",
     "captureCardLabel": "Captura · {{when}}",
     "header": {
-      "modelSummary": "Whisper {{stt}} · Qwen3 · {{llm}}"
+      "modelSummary": "Whisper {{stt}} · {{llm}}"
     },
     "source": {
       "dictation": "Dictado",
@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "Refinada",
       "raw": "En bruto",
-      "refinedHint": "Refinada con Qwen3 · {{model}}",
+      "refinedHint": "Refinada con {{model}}",
       "rawHint": "Transcrita con Whisper {{model}}"
     },
     "actions": {
@@ -126,12 +126,6 @@
         "ready": "Modelo descargado.",
         "missing": "Necesario para transcribir tu audio",
         "missingWithSize": "Necesario para transcribir tu audio · {{size}}"
-      },
-      "llm": {
-        "label": "{{name}} (refinamiento)",
-        "ready": "Modelo descargado.",
-        "missing": "Limpia la transcripción en bruto antes de pegar",
-        "missingWithSize": "Limpia la transcripción en bruto antes de pegar · {{size}}"
       },
       "inputMonitoring": {
         "label": "Permiso de Monitorización de entrada",
@@ -280,8 +274,7 @@
       "defaultEffects": "Efectos predeterminados",
       "defaultEffectsHint": "Efectos aplicados automáticamente a todas las nuevas generaciones con esta voz.",
       "personalityLabel": "Personalidad",
-      "personalityPlaceholder": "p. ej. \"un pirata gruñón que solo habla con metáforas náuticas\"",
-      "personalityHint": "Quién es esta voz y cómo habla. Impulsa el botón Redactar y el interruptor de reescritura en personaje de la página de generación. Déjalo en blanco para ocultar ambos."
+      "personalityPlaceholder": "p. ej. \"un pirata gruñón que solo habla con metáforas náuticas\""
     },
     "avatar": {
       "alt": "Vista previa del avatar"
@@ -973,22 +966,9 @@
       },
       "refinement": {
         "title": "Refinamiento",
-        "description": "Opcionalmente, ejecuta un LLM local sobre las transcripciones para limpiar muletillas, puntuación y autocorrecciones.",
         "auto": {
           "title": "Refinar transcripciones automáticamente",
           "description": "Se ejecuta después de cada captura. Aún puedes alternar entre en bruto y refinada en la pestaña Capturas."
-        },
-        "model": {
-          "title": "Modelo de refinamiento",
-          "description": "Los modelos más grandes son más lentos, pero manejan mejor las autocorrecciones sutiles y el vocabulario técnico.",
-          "size06": "Qwen3 · 0.6B · 400 MB · {{tail}}",
-          "size17": "Qwen3 · 1.7B · 1.1 GB · {{tail}}",
-          "size40": "Qwen3 · 4B · 2.5 GB · {{tail}}",
-          "tail": {
-            "veryFast": "Muy rápido",
-            "fast": "Rápido",
-            "fullQuality": "Calidad completa"
-          }
         },
         "smartCleanup": {
           "title": "Limpieza inteligente",
@@ -1036,8 +1016,7 @@
         "aboutBody": "Mantén pulsado un atajo en cualquier parte de tu equipo, habla, y Voicebox convierte tu voz en texto. Reprodúcelo con cualquier voz clonada, pégalo en cualquier app o canalízalo a tu agente de programación.",
         "differencesTitle": "Qué lo diferencia",
         "local": {
-          "title": "Totalmente local.",
-          "body": "Whisper y el LLM de refinamiento se ejecutan en tu hardware. Sin nube, sin cuentas; tu voz nunca sale del equipo."
+          "title": "Totalmente local."
         },
         "playAs": {
           "title": "Reproduce con cualquier voz.",
@@ -1210,8 +1189,7 @@
     "unknownSize": "Tamaño desconocido",
     "sections": {
       "voiceGeneration": "Generación de voz",
-      "transcription": "Transcripción",
-      "languageModels": "Modelos de lenguaje"
+      "transcription": "Transcripción"
     },
     "status": {
       "loaded": "Cargado"

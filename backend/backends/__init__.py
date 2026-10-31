@@ -178,11 +178,7 @@ class STTBackend(Protocol):
 
 @runtime_checkable
 class LLMBackend(Protocol):
-    """Protocol for local LLM (chat/completion) backend implementations."""
-
-    async def load_model(self, model_size: str) -> None:
-        """Load LLM weights and tokenizer."""
-        ...
+    """Protocol for LLM (chat/completion) backend implementations."""
 
     async def generate(
         self,
@@ -203,13 +199,6 @@ class LLMBackend(Protocol):
         """
         ...
 
-    def unload_model(self) -> None:
-        ...
-
-    def is_loaded(self) -> bool:
-        ...
-
-
 # Global backend instances
 _tts_backend: Optional[TTSBackend] = None
 _tts_backends: dict[str, TTSBackend] = {}
@@ -221,8 +210,8 @@ _llm_backends_lock = threading.Lock()
 
 # Custom OpenAI-compatible LLM endpoint config, seeded from persisted
 # capture settings on startup and refreshed whenever the settings service
-# writes an update. Empty strings and None both mean "unset" and fall back
-# to the built-in Qwen3 backend.
+# writes an update. Empty strings and None both mean "unset": there is no
+# built-in LLM, so LLM features are off until an endpoint is set.
 _custom_llm_endpoint: Optional[str] = None
 _custom_llm_model: Optional[str] = None
 _custom_llm_api_key: Optional[str] = None
@@ -254,11 +243,6 @@ STT_ENGINES = {
 
 # Default STT model when neither the request nor the capture settings name one.
 DEFAULT_STT_MODEL = "whisper-turbo"
-
-LLM_ENGINES = {
-    "qwen_llm": "Qwen3 LLM",
-}
-
 
 def _get_qwen_model_configs() -> list[ModelConfig]:
     """Return Qwen model configs with backend-aware HF repo IDs."""
@@ -574,66 +558,14 @@ def _get_voxtral_realtime_configs() -> list[ModelConfig]:
     ]
 
 
-def _get_qwen_llm_configs() -> list[ModelConfig]:
-    """Return Qwen3 LLM configs with backend-aware HF repo IDs.
-
-    MLX path uses 4-bit community quantizations for Apple Silicon; PyTorch path
-    uses the upstream instruct weights.
-    """
-    backend_type = get_backend_type()
-    if backend_type == "mlx":
-        repo_0_6 = "mlx-community/Qwen3-0.6B-4bit"
-        repo_1_7 = "mlx-community/Qwen3-1.7B-4bit"
-        repo_4 = "mlx-community/Qwen3-4B-4bit"
-    else:
-        repo_0_6 = "Qwen/Qwen3-0.6B"
-        repo_1_7 = "Qwen/Qwen3-1.7B"
-        repo_4 = "Qwen/Qwen3-4B"
-
-    common_languages = [
-        "en", "zh", "ja", "ko", "de", "fr", "ru", "pt", "es", "it",
-    ]
-
-    return [
-        ModelConfig(
-            model_name="qwen3-0.6b",
-            display_name="Qwen3 0.6B",
-            engine="qwen_llm",
-            hf_repo_id=repo_0_6,
-            model_size="0.6B",
-            size_mb=400 if backend_type == "mlx" else 1400,
-            languages=common_languages,
-        ),
-        ModelConfig(
-            model_name="qwen3-1.7b",
-            display_name="Qwen3 1.7B",
-            engine="qwen_llm",
-            hf_repo_id=repo_1_7,
-            model_size="1.7B",
-            size_mb=1100 if backend_type == "mlx" else 3500,
-            languages=common_languages,
-        ),
-        ModelConfig(
-            model_name="qwen3-4b",
-            display_name="Qwen3 4B",
-            engine="qwen_llm",
-            hf_repo_id=repo_4,
-            model_size="4B",
-            size_mb=2500 if backend_type == "mlx" else 8000,
-            languages=common_languages,
-        ),
-    ]
-
-
 def get_all_model_configs() -> list[ModelConfig]:
-    """Return the full list of model configs (TTS + STT + LLM)."""
+    """Return the full list of model configs (TTS + STT)."""
     return (
         _get_qwen_model_configs()
         + _get_qwen_custom_voice_configs()
         + _get_qwen_voice_design_configs()
         + _get_non_qwen_tts_configs()
         + get_stt_model_configs()
-        + _get_qwen_llm_configs()
     )
 
 
@@ -645,11 +577,6 @@ def get_tts_model_configs() -> list[ModelConfig]:
         + _get_qwen_voice_design_configs()
         + _get_non_qwen_tts_configs()
     )
-
-
-def get_llm_model_configs() -> list[ModelConfig]:
-    """Return only LLM model configs."""
-    return _get_qwen_llm_configs()
 
 
 def get_stt_model_configs() -> list[ModelConfig]:
@@ -779,18 +706,6 @@ def unload_model_by_config(config: ModelConfig) -> bool:
             return True
         return False
 
-    if config.engine == "qwen_llm":
-        # Always address the local Qwen backend here: when a custom
-        # OpenAI-compatible endpoint is active, ``get_llm_model()`` returns
-        # the remote backend, and the Models page must still manage the
-        # on-device model.
-        backend = get_llm_backend_for_engine("qwen_llm")
-        loaded_size = getattr(backend, "_current_model_size", None) or getattr(backend, "model_size", None)
-        if backend.is_loaded() and loaded_size == config.model_size:
-            backend.unload_model()
-            return True
-        return False
-
     if config.engine == "qwen":
         tts_model = tts.get_tts_model()
         loaded_size = getattr(tts_model, "_current_model_size", None) or getattr(tts_model, "model_size", None)
@@ -827,11 +742,6 @@ def check_model_loaded(config: ModelConfig) -> bool:
             stt_backend = get_stt_backend(config.engine)
             return stt_backend.is_loaded() and getattr(stt_backend, "model_size", None) == config.model_size
 
-        if config.engine == "qwen_llm":
-            backend = get_llm_backend_for_engine("qwen_llm")
-            loaded_size = getattr(backend, "_current_model_size", None) or getattr(backend, "model_size", None)
-            return backend.is_loaded() and loaded_size == config.model_size
-
         if config.engine == "qwen":
             tts_model = tts.get_tts_model()
             loaded_size = getattr(tts_model, "_current_model_size", None) or getattr(tts_model, "model_size", None)
@@ -861,9 +771,6 @@ def get_model_load_func(config: ModelConfig):
 
     if config.engine == "qwen_custom_voice":
         return lambda: get_tts_backend_for_engine(config.engine).load_model(config.model_size)
-
-    if config.engine == "qwen_llm":
-        return lambda: get_llm_backend_for_engine("qwen_llm").load_model(config.model_size)
 
     return lambda: get_tts_backend_for_engine(config.engine).load_model()
 
@@ -1021,8 +928,8 @@ def set_llm_config(
     Called from the settings service whenever the user writes to the
     ``custom_llm_endpoint`` / ``custom_llm_model`` / ``custom_llm_api_key``
     fields, and once on startup with the persisted row. Passing empty
-    strings or ``None`` clears the config and reverts subsequent
-    ``get_llm_backend()`` calls to the built-in Qwen3 path.
+    strings or ``None`` clears the config, and later ``get_llm_backend()``
+    calls raise ``LLMNotConfiguredError``.
 
     The write, the change detection, and the cache invalidation all run
     under ``_llm_backends_lock`` so a concurrent ``get_llm_backend()``
@@ -1078,71 +985,36 @@ def open_stt_stream(options, vad=None, lock=None):
     return StreamSession(adapter, options, vad=vad, lock=lock)
 
 
+class LLMNotConfiguredError(ValueError):
+    """No custom LLM endpoint is set. A ValueError, so routes answer 400."""
+
+
 def get_llm_backend() -> LLMBackend:
-    """Get or create the active LLM backend.
+    """Get or create the OpenAI-compatible backend for the custom endpoint.
 
-    When a custom OpenAI-compatible endpoint has been configured via
-    ``set_llm_config()``, returns an ``OpenAICompatLLMBackend`` targeting
-    that endpoint; otherwise falls back to the platform-specific Qwen3
-    backend (MLX on Apple Silicon, PyTorch elsewhere).
-
-    The config snapshot, cache lookup, and (if needed) backend
-    construction all happen inside ``_llm_backends_lock`` so a request
-    can't race a ``set_llm_config()`` write and end up talking to a
-    prior endpoint using fresh credentials, or the reverse.
+    Raises ``LLMNotConfiguredError`` when no endpoint is set. The config
+    snapshot, cache lookup and construction run inside
+    ``_llm_backends_lock``, so a request cannot race a ``set_llm_config()``
+    write and talk to an old endpoint with new credentials.
     """
     from .openai_compat_backend import OpenAICompatLLMBackend
 
     with _llm_backends_lock:
         endpoint = _custom_llm_endpoint
         model = _custom_llm_model
-        api_key = _custom_llm_api_key
-        if endpoint and model:
-            cached = _llm_backends.get(_OPENAI_COMPAT_CACHE_KEY)
-            if cached is not None:
-                return cached
-            backend = OpenAICompatLLMBackend(
-                endpoint=endpoint,
-                model=model,
-                api_key=api_key,
+        if not (endpoint and model):
+            raise LLMNotConfiguredError(
+                "No LLM endpoint is set. Set an OpenAI-compatible endpoint and model in Settings > Captures."
             )
-            _llm_backends[_OPENAI_COMPAT_CACHE_KEY] = backend
-            return backend
-
-    # No custom config — hand off to the Qwen dispatch. ``get_llm_backend_for_engine``
-    # reuses this exact ``_llm_backends_lock`` (see its body below), and
-    # ``threading.Lock`` is non-reentrant, so this call MUST run after the
-    # ``with`` block above has released the lock — nesting it inside would
-    # self-deadlock the calling thread. Doing it here also means a slow
-    # model load doesn't block concurrent ``set_llm_config()`` writes.
-    return get_llm_backend_for_engine("qwen_llm")
-
-
-def get_llm_backend_for_engine(engine: str) -> LLMBackend:
-    """Get or create an LLM backend for the given engine."""
-    global _llm_backends
-
-    if engine in _llm_backends:
-        return _llm_backends[engine]
-
-    with _llm_backends_lock:
-        if engine in _llm_backends:
-            return _llm_backends[engine]
-
-        if engine == "qwen_llm":
-            backend_type = get_backend_type()
-            if backend_type == "mlx":
-                from .qwen_llm_backend import MLXQwenLLMBackend
-
-                backend = MLXQwenLLMBackend()
-            else:
-                from .qwen_llm_backend import PyTorchQwenLLMBackend
-
-                backend = PyTorchQwenLLMBackend()
-        else:
-            raise ValueError(f"Unknown LLM engine: {engine}. Supported: {list(LLM_ENGINES.keys())}")
-
-        _llm_backends[engine] = backend
+        cached = _llm_backends.get(_OPENAI_COMPAT_CACHE_KEY)
+        if cached is not None:
+            return cached
+        backend = OpenAICompatLLMBackend(
+            endpoint=endpoint,
+            model=model,
+            api_key=_custom_llm_api_key,
+        )
+        _llm_backends[_OPENAI_COMPAT_CACHE_KEY] = backend
         return backend
 
 

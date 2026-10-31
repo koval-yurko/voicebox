@@ -102,7 +102,7 @@ export function useCaptureRecordingSession(
 ): UseCaptureRecordingSessionResult {
   const queryClient = useQueryClient();
   // Every capture setting is resolved server-side. ``stt_model``,
-  // ``llm_model`` and refine flags are read from the capture_settings table
+  // the LLM endpoint and refine flags are read from the capture_settings table
   // inside POST /captures and /captures/*/refine, and ``auto_refine`` comes
   // back on the create response so the client decides whether to chain a
   // refine call using a value that can't go stale across sibling webviews.

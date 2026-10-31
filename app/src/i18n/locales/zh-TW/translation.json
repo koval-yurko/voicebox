@@ -30,7 +30,7 @@
     "noTranscriptError": "此擷取尚無轉錄文字",
     "captureCardLabel": "擷取 · {{when}}",
     "header": {
-      "modelSummary": "{{stt}} · Qwen3 · {{llm}}"
+      "modelSummary": "{{stt}} · {{llm}}"
     },
     "source": {
       "dictation": "口述",
@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "精修",
       "raw": "原始",
-      "refinedHint": "由 Qwen3 · {{model}} 精修",
+      "refinedHint": "由 {{model}} 精修",
       "rawHint": "由 {{model}} 轉錄"
     },
     "actions": {
@@ -126,12 +126,6 @@
         "ready": "模型已下載。",
         "missing": "用於轉錄您的音訊",
         "missingWithSize": "用於轉錄您的音訊 · {{size}}"
-      },
-      "llm": {
-        "label": "{{name}}(精修)",
-        "ready": "模型已下載。",
-        "missing": "在貼上前清理原始轉錄文字",
-        "missingWithSize": "在貼上前清理原始轉錄文字 · {{size}}"
       },
       "inputMonitoring": {
         "label": "輸入監控權限",
@@ -280,8 +274,7 @@
       "defaultEffects": "預設效果",
       "defaultEffectsHint": "自動套用於使用此聲音所有新生成的效果。",
       "personalityLabel": "個性",
-      "personalityPlaceholder": "例如:「一位脾氣暴躁的海盜,只會用航海比喻說話」",
-      "personalityHint": "這個聲音是誰以及他們如何說話。會驅動生成頁面上的「撰寫」按鈕和角色化重寫切換。留空則兩者都隱藏。"
+      "personalityPlaceholder": "例如:「一位脾氣暴躁的海盜,只會用航海比喻說話」"
     },
     "avatar": {
       "alt": "頭像預覽"
@@ -977,22 +970,9 @@
       },
       "refinement": {
         "title": "精修",
-        "description": "可選擇在轉錄文字上執行本地 LLM,以清除贅詞、補上標點與修正自我更正。",
         "auto": {
           "title": "自動精修轉錄文字",
           "description": "每次擷取後執行。您仍可在「擷取」分頁中切換原始與精修版本。"
-        },
-        "model": {
-          "title": "精修模型",
-          "description": "較大的模型較慢,但對於細微的自我更正與專業詞彙處理得更好。",
-          "size06": "Qwen3 · 0.6B · 400 MB · {{tail}}",
-          "size17": "Qwen3 · 1.7B · 1.1 GB · {{tail}}",
-          "size40": "Qwen3 · 4B · 2.5 GB · {{tail}}",
-          "tail": {
-            "veryFast": "非常快",
-            "fast": "快速",
-            "fullQuality": "完整品質"
-          }
         },
         "smartCleanup": {
           "title": "智慧清理",
@@ -1040,8 +1020,7 @@
         "aboutBody": "在電腦上任何位置按住快捷鍵說話,Voicebox 會將您的聲音轉成文字。可以用任何複製的聲音重播、貼到任何 App,或送進您的程式碼代理。",
         "differencesTitle": "有何不同",
         "local": {
-          "title": "完全在本機。",
-          "body": "Whisper 與精修 LLM 都在您的硬體上執行。沒有雲端、沒有帳號,您的聲音永遠不會離開電腦。"
+          "title": "完全在本機。"
         },
         "playAs": {
           "title": "以任何聲音播放。",
@@ -1186,8 +1165,7 @@
     "unknownSize": "未知大小",
     "sections": {
       "voiceGeneration": "語音生成",
-      "transcription": "語音轉錄",
-      "languageModels": "語言模型"
+      "transcription": "語音轉錄"
     },
     "status": {
       "loaded": "已載入"

@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import config, models
-from ..backends import get_llm_model_configs, resolve_stt_model
+from ..backends import LLMNotConfiguredError, resolve_stt_model
 from ..backends.base import is_model_cached
 from ..database import Capture as DBCapture, get_db
 from ..services import captures as captures_service
@@ -65,7 +65,8 @@ async def create_capture_endpoint(
 
     return models.CaptureCreateResponse(
         **capture.model_dump(),
-        auto_refine=bool(saved.auto_refine),
+        # Without an endpoint the client keeps the raw transcript.
+        auto_refine=bool(saved.auto_refine) and _llm_configured(saved),
         allow_auto_paste=bool(saved.allow_auto_paste),
     )
 
@@ -139,15 +140,14 @@ async def refine_capture_endpoint(
             preserve_technical=saved.preserve_technical,
         )
 
-    resolved_model = request.model_size or saved.llm_model
-
     try:
         capture = await captures_service.refine_capture(
             capture_id=capture_id,
             flags=flags,
-            model_size=resolved_model,
             db=db,
         )
+    except LLMNotConfiguredError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("Refinement failed for capture %s", capture_id)
         raise HTTPException(status_code=500, detail=str(e))
@@ -159,7 +159,7 @@ async def refine_capture_endpoint(
 
 @router.get("/capture/readiness", response_model=models.CaptureReadinessResponse)
 async def capture_readiness_endpoint(db: Session = Depends(get_db)):
-    """Whether the STT and LLM models the user has selected are downloaded.
+    """Whether the selected STT model is downloaded and an LLM endpoint is set.
 
     The frontend gates the global hotkey on this — pressing the chord with
     a missing model would otherwise produce a stuck "transcribing" pill that
@@ -171,18 +171,11 @@ async def capture_readiness_endpoint(db: Session = Depends(get_db)):
     try:
         stt_cfg = resolve_stt_model(saved.stt_model)
     except ValueError:
-        stt_cfg = None
-    llm_cfg = next(
-        (c for c in get_llm_model_configs() if c.model_size == saved.llm_model),
-        None,
-    )
-
-    if stt_cfg is None or llm_cfg is None:
-        # Should be impossible — both fields are validated against known
+        # Should be impossible — the field is validated against known
         # models — but bail loudly rather than return half a response.
         raise HTTPException(
             status_code=500,
-            detail=f"No model config for stt={saved.stt_model} or llm={saved.llm_model}",
+            detail=f"No model config for stt={saved.stt_model}",
         )
 
     return models.CaptureReadinessResponse(
@@ -193,31 +186,27 @@ async def capture_readiness_endpoint(db: Session = Depends(get_db)):
             size=stt_cfg.model_size,
             size_mb=stt_cfg.size_mb or None,
         ),
-        llm=_llm_readiness(saved, llm_cfg),
+        llm=_llm_readiness(saved),
     )
 
 
-def _llm_readiness(saved, llm_cfg) -> models.ModelReadiness:
-    """LLM row of the readiness checklist.
+def _llm_configured(saved) -> bool:
+    return bool(saved.custom_llm_endpoint and saved.custom_llm_model)
 
-    A configured custom OpenAI-compatible endpoint owns the model, so there
-    is nothing to download locally and the gate is green regardless of the
-    Qwen cache; the row names the remote model instead.
+
+def _llm_readiness(saved) -> models.ModelReadiness:
+    """LLM row of the readiness checklist: the custom endpoint, if one is set.
+
+    There is no local model to download, so ``ready`` only says whether an
+    endpoint is set.
     """
-    if saved.custom_llm_endpoint and saved.custom_llm_model:
-        return models.ModelReadiness(
-            ready=True,
-            model_name=llm_cfg.model_name,
-            display_name=saved.custom_llm_model,
-            size=saved.custom_llm_model,
-            size_mb=None,
-        )
+    model = saved.custom_llm_model or ""
     return models.ModelReadiness(
-        ready=is_model_cached(llm_cfg.hf_repo_id),
-        model_name=llm_cfg.model_name,
-        display_name=llm_cfg.display_name,
-        size=llm_cfg.model_size,
-        size_mb=llm_cfg.size_mb or None,
+        ready=_llm_configured(saved),
+        model_name="custom-llm",
+        display_name=model or "LLM endpoint",
+        size=model,
+        size_mb=None,
     )
 
 

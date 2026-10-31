@@ -20,6 +20,7 @@ import { engineSupportsInstruct } from '@/lib/constants/engines';
 import { getLanguageOptionsForEngine, type LanguageCode } from '@/lib/constants/languages';
 import { useGenerationForm } from '@/lib/hooks/useGenerationForm';
 import { useProfile, useProfiles } from '@/lib/hooks/useProfiles';
+import { useCaptureSettings } from '@/lib/hooks/useSettings';
 import { useStory } from '@/lib/hooks/useStories';
 import { cn } from '@/lib/utils/cn';
 import { useGenerationStore } from '@/stores/generationStore';
@@ -43,6 +44,9 @@ export function FloatingGenerateBox({
   const setSelectedEngine = useUIStore((state) => state.setSelectedEngine);
   const { data: selectedProfile } = useProfile(selectedProfileId || '');
   const { data: profiles } = useProfiles();
+  // Compose and persona need the custom LLM endpoint; there is no built-in LLM.
+  const { settings: captureSettings } = useCaptureSettings();
+  const llmReady = Boolean(captureSettings?.custom_llm_endpoint && captureSettings?.custom_llm_model);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isInstructExpanded, setIsInstructExpanded] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
@@ -200,11 +204,12 @@ export function FloatingGenerateBox({
     ) {
       setSelectedPresetId(null);
     }
-    // Persona toggle only applies when the profile has a personality prompt.
-    if (selectedProfile && !selectedProfile.personality?.trim()) {
+    // Persona toggle only applies when the profile has a personality prompt
+    // and an LLM endpoint is set.
+    if ((selectedProfile && !selectedProfile.personality?.trim()) || !llmReady) {
       form.setValue('personality', false);
     }
-  }, [selectedProfile, effectPresets, form]);
+  }, [selectedProfile, effectPresets, form, llmReady]);
 
   // Auto-resize textarea based on content (only when expanded)
   useEffect(() => {
@@ -375,7 +380,7 @@ export function FloatingGenerateBox({
                           type="button"
                           variant="ghost"
                           size="icon"
-                          disabled={composeMutation.isPending || !selectedProfileId}
+                          disabled={composeMutation.isPending || !selectedProfileId || !llmReady}
                           onClick={async () => {
                             const result = await composeMutation.mutateAsync();
                             form.setValue('text', result.text, { shouldDirty: true });
@@ -391,7 +396,7 @@ export function FloatingGenerateBox({
                           )}
                         </Button>
                         <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap rounded-md bg-popover px-3 py-1.5 text-xs text-popover-foreground border border-border opacity-0 transition-opacity group-hover:opacity-100 z-[9999]">
-                          {t('generation.compose.tooltip')}
+                          {llmReady ? t('generation.compose.tooltip') : t('generation.needsLlmEndpoint')}
                         </span>
                       </div>
                     </motion.div>
@@ -421,6 +426,7 @@ export function FloatingGenerateBox({
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => field.onChange(!active)}
+                                    disabled={!llmReady}
                                     className={cn(
                                       'h-10 w-10 rounded-full transition-all duration-200',
                                       active
@@ -433,7 +439,11 @@ export function FloatingGenerateBox({
                                     <Wand2 className="h-4 w-4" />
                                   </Button>
                                   <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap rounded-md bg-popover px-3 py-1.5 text-xs text-popover-foreground border border-border opacity-0 transition-opacity group-hover:opacity-100 z-[9999]">
-                                    {active ? t('generation.persona.tooltipActive') : t('generation.persona.tooltipInactive')}
+                                    {!llmReady
+                                      ? t('generation.needsLlmEndpoint')
+                                      : active
+                                        ? t('generation.persona.tooltipActive')
+                                        : t('generation.persona.tooltipInactive')}
                                   </span>
                                 </div>
                               </FormControl>

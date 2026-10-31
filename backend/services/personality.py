@@ -69,10 +69,7 @@ def _require_personality(personality: str | None) -> str:
     return personality
 
 
-async def compose_as_profile(
-    personality: str | None,
-    model_size: str | None = None,
-) -> PersonalityResult:
+async def compose_as_profile(personality: str | None) -> PersonalityResult:
     """Produce a fresh utterance in the character's voice.
 
     No user input; the system prompt plus a trigger user turn ("Speak.")
@@ -82,7 +79,7 @@ async def compose_as_profile(
     """
     text = _require_personality(personality)
     backend = llm_service.get_llm_model()
-    resolved_size = llm_service.resolve_model_size(backend, model_size)
+    resolved_size = backend.model_size
 
     system_prompt = _build_system_prompt(text, _COMPOSE_TASK)
     output = await backend.generate(
@@ -98,7 +95,6 @@ async def compose_as_profile(
 async def rewrite_as_profile(
     personality: str | None,
     user_text: str,
-    model_size: str | None = None,
 ) -> PersonalityResult:
     """Restate the user's text in the character's voice, ideas intact."""
     character = _require_personality(personality)
@@ -107,7 +103,7 @@ async def rewrite_as_profile(
         raise ValueError("Rewrite needs non-empty text to restate.")
 
     backend = llm_service.get_llm_model()
-    resolved_size = llm_service.resolve_model_size(backend, model_size)
+    resolved_size = backend.model_size
 
     system_prompt = _build_system_prompt(character, _REWRITE_TASK)
     output = await backend.generate(

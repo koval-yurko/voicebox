@@ -78,10 +78,10 @@ def test_load_by_model_name_targets_that_model(client, loaded):
 
 @pytest.mark.parametrize(
     "model_name",
-    ["qwen-tts-0.6B", "chatterbox-tts", "whisper-turbo", "qwen3-0.6b"],
+    ["qwen-tts-0.6B", "chatterbox-tts", "whisper-turbo"],
 )
 def test_load_dispatches_across_engine_families(client, loaded, model_name):
-    """TTS, STT, and LLM entries all resolve through the same registry."""
+    """TTS and STT entries all resolve through the same registry."""
     assert client.post("/models/load", json={"model_name": model_name}).status_code == 200
     assert loaded["by_config"] == [model_name]
 

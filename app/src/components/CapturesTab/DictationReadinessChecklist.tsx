@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { apiClient } from '@/lib/api/client';
 import type { ActiveDownloadTask } from '@/lib/api/types';
-import type { DictationReadiness, ReadinessGate } from '@/lib/hooks/useDictationReadiness';
+import type { DictationReadiness } from '@/lib/hooks/useDictationReadiness';
 import { cn } from '@/lib/utils/cn';
 
 interface RowProps {
@@ -131,20 +131,19 @@ export function DictationReadinessChecklist({
   }, [downloadByModel, queryClient]);
 
   const downloadMutation = useMutation({
-    mutationFn: async ({ modelName }: { gate: ReadinessGate; modelName: string }) =>
-      apiClient.triggerModelDownload(modelName),
-    onSuccess: (_data, vars) => {
+    mutationFn: async (modelName: string) => apiClient.triggerModelDownload(modelName),
+    onSuccess: () => {
       // Bump activeTasks so the row immediately shows "Downloading…" without
       // waiting for the next 5s poll. modelStatus + readiness invalidations
       // keep adjacent UI in sync.
       queryClient.invalidateQueries({ queryKey: ['activeTasks'] });
       queryClient.invalidateQueries({ queryKey: ['modelStatus'] });
       queryClient.invalidateQueries({ queryKey: ['capture-readiness'] });
-      const displayName =
-        vars.gate === 'stt' ? readiness.stt?.display_name : readiness.llm?.display_name;
       toast({
         title: t('captures.readiness.downloadStarted'),
-        description: t('captures.readiness.downloadStartedDescription', { name: displayName }),
+        description: t('captures.readiness.downloadStartedDescription', {
+          name: readiness.stt?.display_name,
+        }),
       });
     },
     onError: (err: Error) => {
@@ -158,21 +157,15 @@ export function DictationReadinessChecklist({
 
   const sttSize =
     readiness.stt?.size_mb != null ? `${(readiness.stt.size_mb / 1000).toFixed(1)} GB` : null;
-  const llmSize =
-    readiness.llm?.size_mb != null ? `${(readiness.llm.size_mb / 1000).toFixed(1)} GB` : null;
 
-  function modelDownloadButton(
-    gate: 'stt' | 'llm',
-    modelName: string,
-    ready: boolean,
-  ): React.ReactNode {
+  function modelDownloadButton(modelName: string, ready: boolean): React.ReactNode {
     const task = downloadByModel.get(modelName);
     const downloading = !ready && !!task;
     const pct = progressPercent(task);
     return (
       <Button
         size="sm"
-        onClick={() => downloadMutation.mutate({ gate, modelName })}
+        onClick={() => downloadMutation.mutate(modelName)}
         disabled={downloading || downloadMutation.isPending}
         className="gap-1.5"
       >
@@ -218,23 +211,7 @@ export function DictationReadinessChecklist({
                 : t('captures.readiness.stt.missing')
           }
           ready={readiness.stt.ready}
-          action={modelDownloadButton('stt', readiness.stt.model_name, readiness.stt.ready)}
-        />
-      )}
-
-      {readiness.autoRefine && readiness.llm && (
-        <ChecklistRow
-          icon={<Cpu className="h-3.5 w-3.5" />}
-          title={t('captures.readiness.llm.label', { name: readiness.llm.display_name })}
-          description={
-            readiness.llm.ready
-              ? t('captures.readiness.llm.ready')
-              : llmSize
-                ? t('captures.readiness.llm.missingWithSize', { size: llmSize })
-                : t('captures.readiness.llm.missing')
-          }
-          ready={readiness.llm.ready}
-          action={modelDownloadButton('llm', readiness.llm.model_name, readiness.llm.ready)}
+          action={modelDownloadButton(readiness.stt.model_name, readiness.stt.ready)}
         />
       )}
 
