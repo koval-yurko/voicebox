@@ -200,7 +200,7 @@ Three places to check that the right backend is being used:
   </Accordion>
 
   <Accordion title="Out of memory (CUDA)">
-    - Switch to a smaller model size (e.g. Qwen3 0.6B instead of 1.7B)
+    - Switch to a smaller model size (e.g. Qwen3-TTS 0.6B instead of 1.7B)
     - Use Settings → Models to unload other engines you're not using
     - Enable `low_cpu_mem_usage` is already on for CPU; for CUDA, the engine's `device_map` handles offload automatically
     - Close other GPU applications

@@ -1,27 +1,26 @@
 ---
 title: "Voice Personalities"
-description: "Attach a personality to a voice profile, compose fresh in-character lines, and rewrite input text in their voice — all powered by a local LLM."
+description: "Attach a personality to a voice profile, compose fresh in-character lines, and rewrite input text in their voice — powered by an LLM endpoint you choose."
 ---
 
 ## Overview
 
 A **personality** is an optional free-form description attached to a voice
 profile — who this voice is, how they speak, what they care about. Set one
-and two new controls appear next to the generate button, both powered by a
-bundled Qwen3 LLM running entirely locally:
+and two new controls appear next to the generate button. Both need an LLM
+endpoint (see [The LLM endpoint](#the-llm-endpoint)):
 
 - **Compose** — drop a fresh in-character line into the textarea. Click
   again for a different take.
 - **Speak in character** — a toggle that rewrites your input text in the
   character's voice before TTS, preserving every idea.
 
-The LLM produces the text. The voice profile speaks it. No cloud round-trip,
-no external API — the whole loop runs on your hardware.
+The LLM produces the text. The voice profile speaks it. Run the LLM server on
+the same machine and the whole loop stays on your hardware.
 
 <Callout type="info">
-  Personalities shipped in **0.5.0**. The same local LLM doubles as the
-  refinement model for [Dictation](/overview/dictation) — one LLM in the app,
-  not two, sharing one model cache and one GPU-memory footprint.
+  Personalities shipped in **0.5.0**. The same LLM endpoint also powers
+  refinement for [Dictation](/overview/dictation).
 </Callout>
 
 ## Setting a personality
@@ -82,24 +81,16 @@ isn't speakable ends up either ignored or read literally. The speech-only
 framing also makes the output land cleanly inside dialogue, so you can drop
 a Respond result straight into a Story.
 
-## The local LLM
+## The LLM endpoint
 
-The bundled LLM is **Qwen3**, available in three sizes:
+Voicebox has no built-in LLM. Personalities run on any OpenAI-compatible
+`/v1/chat/completions` server — LM Studio, Ollama, `mlx_lm.server`,
+llama.cpp, vLLM, or the OpenAI API. Set the URL, model and optional API key
+in **Settings → Captures → Refinement → LLM endpoint**. Refinement uses the
+same endpoint, so a model change applies to both on the next call.
 
-| Model | Download size | Best for |
-|---|---|---|
-| Qwen3 0.6B | ~400 MB | Default. Very fast, good for casual use. |
-| Qwen3 1.7B | ~1.1 GB | Sweet spot for character personalities with specific phrasing. |
-| Qwen3 4B | ~2.5 GB | Full quality. Slowest. Useful for very particular tone. |
-
-The model runs through the same backend split Voicebox already uses for TTS
-— **MLX** (4-bit community quants) on Apple Silicon, **PyTorch** (transformers
-`AutoModelForCausalLM`) everywhere else. Downloads go through the same cache
-and model-management UI as TTS models.
-
-Pick a size in **Settings → Captures → Refinement → Refinement model** — the
-personality modes reuse it. If you switch models, both refinement and
-personality output pick up the change on the next call.
+Without an endpoint, Compose and the persona toggle are disabled, and the
+API calls below return `400` with "No LLM endpoint is set".
 
 ## Using the controls
 
@@ -148,7 +139,7 @@ Personalities are accessible via REST:
 |---|---|---|
 | `PUT` | `/profiles/{id}` | Include a `personality` field up to 2,000 chars to set it. |
 | `POST` | `/profiles/{id}/compose` | No body. Returns a fresh in-character utterance as text. |
-| `POST` | `/generate` | Include `personality: true` to run input text through the personality LLM before TTS. Same for `POST /speak`. |
+| `POST` | `/generate` | Include `personality: true` to run input text through the LLM endpoint before TTS. Same for `POST /speak`. |
 
 `POST /generate` with `personality: true` is the same primitive MCP's
 `voicebox_speak` tool uses when you pass `personality: true`. Scripts and

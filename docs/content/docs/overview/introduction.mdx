@@ -18,8 +18,8 @@ accounts:
 
 It's the free, local alternative to both ElevenLabs (voice cloning and TTS)
 and WisprFlow (voice dictation for agents and power users) — covering both
-sides of the same loop in one app, with a single model directory and LLM
-shared between input and output.
+sides of the same loop in one app, with a single model directory shared
+between input and output.
 
 ## What's in the app
 
@@ -32,7 +32,7 @@ shared between input and output.
 - **Preset voices** — 50+ curated voices via Kokoro and Qwen CustomVoice
   for when you don't want to clone (see [Preset Voices](/overview/preset-voices))
 - **Voice personalities** — optional free-form personality on any profile
-  plus a compose button and persona-rewrite toggle powered by a local LLM (see
+  plus a compose button and persona-rewrite toggle powered by your LLM endpoint (see
   [Voice Personalities](/overview/voice-personalities))
 - **Post-processing effects** — pitch shift, reverb, delay, chorus,
   compression, filters (Spotify's Pedalboard)
@@ -59,17 +59,20 @@ Eight engines with different strengths, switchable per-generation:
 | **TADA** (1B / 3B) | Cloned | 10 | HumeAI speech-language model — 700s+ coherent audio |
 | **Kokoro** | Preset (50 voices) | 9 | 82M parameters, CPU realtime, lowest VRAM of any engine |
 
-## STT and local LLM
+## STT and LLM
 
-Voicebox also runs a full speech recognition and local LLM stack, shared
-between dictation, the Captures tab, and per-profile personality modes:
+Voicebox runs speech recognition locally, shared between dictation and the
+Captures tab. It has no built-in LLM: transcript refinement and per-profile
+personality modes use an LLM endpoint you set.
 
 | Layer | Models |
 |---|---|
 | **STT** | Whisper Base / Small / Medium / Large / Turbo (PyTorch or MLX) |
-| **LLM** | Qwen3 0.6B / 1.7B / 4B (refinement + per-profile compose / persona-rewrite) |
+| **LLM** | Your OpenAI-compatible endpoint — LM Studio, Ollama, `mlx_lm.server`, llama.cpp, vLLM or the OpenAI API (Settings → Captures) |
 
-No cloud fallback, no bring-your-own-API-key. Local is the product.
+Without an endpoint, dictation keeps the raw transcript and the personality
+controls are disabled. Run the LLM server on the same machine to keep
+everything local.
 
 ## GPU Support
 
@@ -103,7 +106,7 @@ No cloud fallback, no bring-your-own-API-key. Local is the product.
 | Backend | FastAPI (Python) |
 | TTS Engines | Qwen3-TTS, Qwen CustomVoice, LuxTTS, Chatterbox, Chatterbox Turbo, TADA, Kokoro |
 | STT | Whisper / Whisper Turbo (PyTorch or MLX) |
-| Local LLM | Qwen3 0.6B / 1.7B / 4B (MLX or PyTorch) |
+| LLM | None built in; optional OpenAI-compatible endpoint |
 | Effects | Pedalboard (Spotify) |
 | Inference | MLX (Apple Silicon) / PyTorch (CUDA/ROCm/XPU/CPU) |
 | Database | SQLite |
