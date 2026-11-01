@@ -220,9 +220,30 @@ async fn server_role(port: u16) -> Option<String> {
     Some(body.get("role").and_then(|v| v.as_str()).unwrap_or("all").to_string())
 }
 
-/// Start the TTS and STT workers that are not already running, then wait for
-/// their /health. Call only when main runs with `--role main`.
-async fn start_workers(app: &tauri::AppHandle, state: &State<'_, ServerState>) -> Result<(), String> {
+/// At most this many restarts per worker inside `RESTART_WINDOW`, so a worker
+/// that crashes at startup does not loop.
+const MAX_WORKER_RESTARTS: usize = 3;
+const RESTART_WINDOW: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Record a restart in `history` if the limit allows it.
+fn restart_allowed(history: &mut Vec<std::time::Instant>, now: std::time::Instant) -> bool {
+    history.retain(|t| now.duration_since(*t) < RESTART_WINDOW);
+    if history.len() >= MAX_WORKER_RESTARTS {
+        return false;
+    }
+    history.push(now);
+    true
+}
+
+fn worker_log(app: &tauri::AppHandle, role: &str, stream: &str, line: &str) {
+    let line = format!("[{}] {}", role, line);
+    println!("{}", line);
+    let _ = app.emit("server-log", serde_json::json!({ "stream": stream, "line": line }));
+}
+
+/// Spawn 1 worker with the exe, data dir and models dir of this server.
+fn spawn_worker(app: &tauri::AppHandle, role: &'static str, port: u16) -> Result<(), String> {
+    let state = app.state::<ServerState>();
     let data_dir = app
         .path()
         .app_data_dir()
@@ -232,50 +253,95 @@ async fn start_workers(app: &tauri::AppHandle, state: &State<'_, ServerState>) -
     // sidecar (right on macOS, the only target); record the exe if GPU builds need it.
     let exe = state.backend_exe.lock().unwrap().clone();
     let models_dir = state.models_dir.lock().unwrap().clone();
+    let mut cmd = match &exe {
+        Some(path) => app
+            .shell()
+            .command(path.to_str().ok_or("Invalid backend path")?)
+            .current_dir(path.parent().ok_or("Invalid backend path")?),
+        None => app
+            .shell()
+            .sidecar("voicebox-server")
+            .map_err(|e| format!("Failed to get sidecar: {}", e))?,
+    };
+    let port_str = port.to_string();
     let parent_pid = std::process::id().to_string();
+    cmd = cmd.args(["--role", role, "--port", &port_str, "--data-dir", &data_dir, "--parent-pid", &parent_pid]);
+    if let Some(ref dir) = models_dir {
+        cmd = cmd.env("VOICEBOX_MODELS_DIR", dir);
+    }
+    println!("Starting {} worker on port {}", role, port);
+    let (mut rx, child) = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to start the {} worker: {}", role, e))?;
+    let pid = child.pid();
+    state.workers.lock().unwrap().push(child);
 
+    // Read the output, or the worker blocks when the pipe is full.
+    let app_handle = app.clone();
+    tokio::spawn(async move {
+        use tauri_plugin_shell::process::CommandEvent;
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => worker_log(&app_handle, role, "stdout", String::from_utf8_lossy(&line).trim_end()),
+                CommandEvent::Stderr(line) => worker_log(&app_handle, role, "stderr", String::from_utf8_lossy(&line).trim_end()),
+                CommandEvent::Terminated(p) => {
+                    worker_log(&app_handle, role, "stderr", &format!("worker exited (code {:?})", p.code));
+                    handle_worker_exit(app_handle.clone(), role, port, pid);
+                }
+                _ => {}
+            }
+        }
+    });
+    Ok(())
+}
+
+/// Restart a worker that exited on its own. stop_server removes its children
+/// before it kills them, so a child that is no longer listed was stopped on purpose.
+fn handle_worker_exit(app: tauri::AppHandle, role: &'static str, port: u16, pid: u32) {
+    let state = app.state::<ServerState>();
+    {
+        let mut workers = state.workers.lock().unwrap();
+        let Some(i) = workers.iter().position(|c| c.pid() == pid) else {
+            return;
+        };
+        workers.remove(i);
+    }
+    let allowed = restart_allowed(
+        state.worker_restarts.lock().unwrap().entry(role).or_default(),
+        std::time::Instant::now(),
+    );
+    if !allowed {
+        worker_log(&app, role, "stderr", &format!(
+            "worker exited {} times in {} s; not restarting it until the next server start",
+            MAX_WORKER_RESTARTS + 1,
+            RESTART_WINDOW.as_secs()
+        ));
+        return;
+    }
+    let epoch = state.worker_epoch.load(std::sync::atomic::Ordering::SeqCst);
+    tokio::spawn(async move {
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        // A stop during the delay bumps the epoch: then do not start it again.
+        if app.state::<ServerState>().worker_epoch.load(std::sync::atomic::Ordering::SeqCst) != epoch {
+            return;
+        }
+        worker_log(&app, role, "stderr", "restarting worker");
+        if let Err(e) = spawn_worker(&app, role, port) {
+            worker_log(&app, role, "stderr", &e);
+        }
+    });
+}
+
+/// Start the TTS and STT workers that are not already running, then wait for
+/// their /health. Call only when main runs with `--role main`.
+async fn start_workers(app: &tauri::AppHandle, state: &State<'_, ServerState>) -> Result<(), String> {
+    state.worker_restarts.lock().unwrap().clear();
     for (role, port) in WORKERS {
         if server_role(port).await.as_deref() == Some(role) {
             println!("Reusing {} worker on port {}", role, port);
             continue;
         }
-        let mut cmd = match &exe {
-            Some(path) => app
-                .shell()
-                .command(path.to_str().ok_or("Invalid backend path")?)
-                .current_dir(path.parent().ok_or("Invalid backend path")?),
-            None => app
-                .shell()
-                .sidecar("voicebox-server")
-                .map_err(|e| format!("Failed to get sidecar: {}", e))?,
-        };
-        let port_str = port.to_string();
-        cmd = cmd.args(["--role", role, "--port", &port_str, "--data-dir", &data_dir, "--parent-pid", &parent_pid]);
-        if let Some(ref dir) = models_dir {
-            cmd = cmd.env("VOICEBOX_MODELS_DIR", dir);
-        }
-        println!("Starting {} worker on port {}", role, port);
-        let (mut rx, child) = cmd
-            .spawn()
-            .map_err(|e| format!("Failed to start the {} worker: {}", role, e))?;
-        state.workers.lock().unwrap().push(child);
-
-        // Read the output, or the worker blocks when the pipe is full.
-        let app_handle = app.clone();
-        tokio::spawn(async move {
-            use tauri_plugin_shell::process::CommandEvent;
-            while let Some(event) = rx.recv().await {
-                let (stream, line) = match event {
-                    CommandEvent::Stdout(line) => ("stdout", String::from_utf8_lossy(&line).trim_end().to_string()),
-                    CommandEvent::Stderr(line) => ("stderr", String::from_utf8_lossy(&line).trim_end().to_string()),
-                    CommandEvent::Terminated(p) => ("stderr", format!("worker exited (code {:?})", p.code)),
-                    _ => continue,
-                };
-                let line = format!("[{}] {}", role, line);
-                println!("{}", line);
-                let _ = app_handle.emit("server-log", serde_json::json!({ "stream": stream, "line": line }));
-            }
-        });
+        spawn_worker(app, role, port)?;
     }
 
     let deadline = tokio::time::Instant::now() + tokio::time::Duration::from_secs(120);
@@ -324,6 +390,10 @@ struct ServerState {
     /// None: the bundled sidecar.
     backend_exe: Mutex<Option<std::path::PathBuf>>,
     workers: Mutex<Vec<tauri_plugin_shell::process::CommandChild>>,
+    /// Restart times per worker role, for the restart limit.
+    worker_restarts: Mutex<std::collections::HashMap<&'static str, Vec<std::time::Instant>>>,
+    /// Bumped on every stop, so a restart that waits in its delay can see it.
+    worker_epoch: std::sync::atomic::AtomicU64,
     keep_running_on_close: Mutex<bool>,
     models_dir: Mutex<Option<String>>,
     /// Override the backend selection: Some("cpu") forces the CPU sidecar even
@@ -982,6 +1052,7 @@ async fn start_main(
 async fn stop_server(state: State<'_, ServerState>) -> Result<(), String> {
     let pid = state.server_pid.lock().unwrap().take();
     let _child = state.child.lock().unwrap().take();
+    state.worker_epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let workers: Vec<_> = state.workers.lock().unwrap().drain(..).collect();
     let _ = tokio::task::spawn_blocking(move || stop_workers(workers)).await;
     
@@ -1562,6 +1633,8 @@ pub fn run() {
             worker_processes: Mutex::new(true),
             backend_exe: Mutex::new(None),
             workers: Mutex::new(Vec::new()),
+            worker_restarts: Mutex::new(std::collections::HashMap::new()),
+            worker_epoch: std::sync::atomic::AtomicU64::new(0),
             keep_running_on_close: Mutex::new(false),
             models_dir: Mutex::new(None),
             backend_override: Mutex::new(None),
@@ -1803,6 +1876,7 @@ pub fn run() {
                         // immediate cleanup.
                         println!("RunEvent::Exit - server will self-terminate via watchdog");
                         // Only workers of a server this app started or reused, not a dev setup.
+                        state.worker_epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         if has_pid {
                             stop_workers(state.workers.lock().unwrap().drain(..).collect());
                         }
@@ -1837,4 +1911,23 @@ pub fn run() {
 
 fn main() {
     run();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restart_limit_allows_3_per_window() {
+        let t0 = std::time::Instant::now();
+        let mut history = Vec::new();
+        for i in 0..3 {
+            assert!(restart_allowed(&mut history, t0 + std::time::Duration::from_secs(i)));
+        }
+        assert!(!restart_allowed(&mut history, t0 + std::time::Duration::from_secs(10)));
+        // The first restart leaves the window after 60 s, so 1 more is allowed.
+        assert!(restart_allowed(&mut history, t0 + std::time::Duration::from_secs(60)));
+        // At the same moment the window holds 3 again (1 s, 2 s, 60 s), so no more.
+        assert!(!restart_allowed(&mut history, t0 + std::time::Duration::from_secs(60)));
+    }
 }
