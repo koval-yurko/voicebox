@@ -95,7 +95,7 @@ def is_model_cached(
         return False
 
 
-# Documented escape hatch (docs/content/docs/overview/gpu-acceleration.mdx):
+# Documented escape hatch (VOICEBOX_FORCE_CPU):
 # users whose GPU has no compiled kernels in the bundled PyTorch set this to run
 # on CPU instead of crashing at generation time.
 FORCE_CPU_ENV_VAR = "VOICEBOX_FORCE_CPU"

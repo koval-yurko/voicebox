@@ -125,24 +125,6 @@ After starting the backend server:
 ```
 This downloads the OpenAPI schema and generates the TypeScript client in `app/src/lib/api/`
 
-### Convert Assets to Web Formats
-
-To optimize images and videos for the web, run:
-```bash
-bun run convert:assets
-```
-
-This script:
-- Converts PNG → WebP (better compression, same quality)
-- Converts MOV → WebM (VP9 codec, smaller file size)
-- Processes files in `docs/public/`
-- **Deletes original files** after successful conversion
-
-**Requirements:** Install `webp` and `ffmpeg`:
-```bash
-brew install webp ffmpeg
-```
-
 > **Note:** Run this before committing new images or videos to keep the repository size small.
 
 ## Development Workflow
@@ -160,7 +142,7 @@ git checkout -b fix/your-bug-fix
 - Write clean, readable code
 - Follow existing code style
 - Add comments for complex logic
-- Update documentation as needed
+- Update documentation as needed: the wiki pages are the Markdown files in `docs/` (one file per page, `_Sidebar.md` for the menu). A push to `main` publishes them to the wiki, so do not edit pages in the wiki web editor
 
 ### 3. Test Your Changes
 
@@ -262,7 +244,6 @@ voicebox/
 
 ### ✨ New Features
 
-- Check the roadmap in README.md and the engineering status in [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) before proposing work — it lists prioritized tasks (Tier 1 → 3), known architectural bottlenecks, and candidate TTS engines already under evaluation (including why some have been backlogged)
 - Discuss major features in an issue first
 - Keep features focused and well-scoped
 
@@ -361,28 +342,26 @@ Releases are managed by maintainers:
 
 ## Troubleshooting
 
-See [docs/content/docs/overview/troubleshooting.mdx](docs/content/docs/overview/troubleshooting.mdx) for common issues and solutions.
+See the [Troubleshooting](https://github.com/koval-yurko/voicebox/wiki/Troubleshooting) wiki page for common issues and solutions.
 
 **Quick fixes:**
 
 - **Backend won't start:** Check Python version (must be 3.12), ensure venv is activated, install dependencies
 - **Tauri build fails:** Ensure Rust is installed, clean build with `cd tauri/src-tauri && cargo clean`
-- **OpenAPI client generation fails:** Ensure backend is running, check `curl http://localhost:17493/openapi.json`
+- **OpenAPI client generation fails:** Ensure backend is running, check `curl http://localhost:17593/openapi.json`
 
 ## Questions?
 
 - Open an issue for bugs or feature requests
 - Check existing issues and discussions
 - Review the codebase to understand patterns
-- See [docs/content/docs/overview/troubleshooting.mdx](docs/content/docs/overview/troubleshooting.mdx) for common issues
+- See the [Troubleshooting](https://github.com/koval-yurko/voicebox/wiki/Troubleshooting) wiki page for common issues
 
 ## Additional Resources
 
 - [README.md](README.md) - Project overview
 - [backend/README.md](backend/README.md) - API documentation
-- [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) - Living engineering roadmap: architecture, shipped vs in-flight work, prioritized open issues, candidate TTS engines under evaluation, architectural bottlenecks. Keep this updated when you ship significant features, close or backlog a model integration, or identify new bottlenecks.
-- [docs/AUTOUPDATER_QUICKSTART.md](docs/AUTOUPDATER_QUICKSTART.md) - Auto-updater setup
-- [SECURITY.md](SECURITY.md) - Security policy
+- [Autoupdater](https://github.com/koval-yurko/voicebox/wiki/Autoupdater) (wiki) - Auto-updater setup
 - [CHANGELOG.md](CHANGELOG.md) - Version history
 
 ## License

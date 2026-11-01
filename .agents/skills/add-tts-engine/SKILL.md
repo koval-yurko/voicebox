@@ -11,7 +11,7 @@ Integrate a new text-to-speech engine into Voicebox end-to-end: dependency resea
 
 ## Reference Doc
 
-The full phased guide lives at `docs/content/docs/developer/tts-engines.mdx`. **Read this file in its entirety before starting.** It contains:
+The full phased guide lives at `docs-internal/tts-engines.mdx`. **Read this file in its entirety before starting.** It contains:
 
 - Phase 0: Dependency research (mandatory before writing code)
 - Phase 1: Backend implementation (`TTSBackend` protocol)
@@ -28,7 +28,7 @@ The full phased guide lives at `docs/content/docs/developer/tts-engines.mdx`. **
 
 ```bash
 # Read the full TTS engines doc
-cat docs/content/docs/developer/tts-engines.mdx
+cat docs-internal/tts-engines.mdx
 ```
 
 Internalize all phases, especially Phase 0 and Phase 5. The v0.2.3 release was three patch releases because Phase 0 was skipped.

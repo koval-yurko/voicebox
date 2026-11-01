@@ -779,10 +779,6 @@
       "docs": {
         "title": "Read the Docs"
       },
-      "discord": {
-        "title": "Join the Discord",
-        "subtitle": "Get help & share voices"
-      },
       "serverUrl": {
         "title": "Server URL",
         "description": "The address of your voicebox backend server.",

@@ -775,10 +775,6 @@
       "docs": {
         "title": "Leggi la documentazione"
       },
-      "discord": {
-        "title": "Unisciti a Discord",
-        "subtitle": "Ricevi aiuto e condividi le voci"
-      },
       "serverUrl": {
         "title": "URL del server",
         "description": "L'indirizzo del server backend di Voicebox.",
