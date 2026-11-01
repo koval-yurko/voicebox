@@ -7,7 +7,7 @@ Local STT and TTS for [LiveKit Agents](https://docs.livekit.io/agents/) 1.8+, th
 
 The agent connects over loopback (`127.0.0.1`), so the API key gate for external `/tts/*` requests does not apply.
 
-With separate TTS and STT processes (the default in the Voicebox YK app), streaming runs on the workers, not on the main server: point `VoiceboxSTT` at the STT worker (`http://127.0.0.1:17495`) and `VoiceboxTTS` at the TTS worker (`http://127.0.0.1:17494`). Settings > General shows both URLs. The main server refuses `/stt/ws` and `/tts/ws` when it has workers.
+With separate TTS and STT processes (the default in the Voicebox YK app), streaming runs on the workers, not on the main server (`17593`). The plugin defaults point there: `VoiceboxSTT` at the STT worker (`http://127.0.0.1:17495`) and `VoiceboxTTS` at the TTS worker (`http://127.0.0.1:17494`). Settings > General shows both URLs. The main server refuses `/stt/ws` and `/tts/ws` when it has workers. With 1 Voicebox process (`--role all`, or the setting off), pass `base_url="http://127.0.0.1:17593"` to both.
 
 ## Setup
 
@@ -39,10 +39,21 @@ session = AgentSession(
 |---|---|---|
 | `model` | `qwen-asr-0.6B` | Voicebox STT model. `None` uses the default model of the Voicebox capture settings. |
 | `language` | `None` | ISO code. `None` lets the model detect the language. |
-| `base_url` | `http://127.0.0.1:17493` | Voicebox server. |
+| `base_url` | `http://127.0.0.1:17495` | Voicebox STT worker, or a 1-process server. |
 | `vad` | `True` | `True`: the server VAD opens and closes segments. `False`: a segment closes only when the agent flushes the stream. |
 | `interim` | `True` | Ask for interim text. `capabilities.interim_results` follows the server `ready` capabilities. |
 | `delay_ms` | `None` | `voxtral-realtime-4B` only: transcription delay, a multiple of 80 from 80 to 1200, or 2400. Lower is faster with more errors. `None` uses the server default (240). |
+
+`VoiceboxTTS` options:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `profile_id` | (required) | Voicebox voice profile ID (`GET /profiles` on the main server). |
+| `language` | `en` | ISO code of the speech. |
+| `engine` | `None` | TTS engine (`qwen`, `kokoro`, ...). `None` uses the profile default. |
+| `model_size` | `1.7B` | Model size for engines with sizes (`1.7B` or `0.6B` for Qwen). |
+| `interval_ms` | `320` | Audio length per streamed chunk. |
+| `base_url` | `http://127.0.0.1:17494` | Voicebox TTS worker, or a 1-process server. |
 
 Event mapping: `speech_start` → `START_OF_SPEECH`, `interim` → `INTERIM_TRANSCRIPT`, `final` → `FINAL_TRANSCRIPT`, `speech_end` → `END_OF_SPEECH`.
 
@@ -65,8 +76,8 @@ Without `OLLAMA_MODEL`, the agent repeats what it heard (echo mode, no LLM). The
 
 ```bash
 uv run pytest -q                                                  # plugin tests with fake servers
-uv run python scripts/smoke_stt.py --port 17493 speech.wav        # VoiceboxSTT on a WAV file
-uv run python scripts/e2e_session.py speech_pause_speech_16k.wav  # AgentSession: transcripts + barge-in
+uv run python scripts/smoke_stt.py speech.wav                     # VoiceboxSTT on a WAV file (STT worker, --port to change)
+uv run --extra example python scripts/e2e_session.py speech_pause_speech_16k.wav  # AgentSession: transcripts + barge-in
 ```
 
-`e2e_session.py` runs a full `AgentSession` with a fake mic (a WAV file in real time) and a fake speaker, with the real Voicebox STT and TTS. It checks the final transcripts and that user speech during the agent reply stops the agent. Use `../../backend/tests/fixtures/speech_pause_speech_16k.wav`.
+`e2e_session.py` runs a full `AgentSession` with a fake mic (a WAV file in real time) and a fake speaker, with the real Voicebox STT and TTS. It checks the final transcripts and that user speech during the agent reply stops the agent. Use `../../backend/tests/fixtures/speech_pause_speech_16k.wav`. Default ports: `--stt-port 17495`, `--tts-port 17494`, `--main-port 17593` (for the profile list). With 1 Voicebox process, pass the same port to all 3.
