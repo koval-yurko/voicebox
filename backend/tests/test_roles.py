@@ -106,3 +106,41 @@ def test_worker_mlx_cache_limit(monkeypatch, role, env, expected):
     else:
         monkeypatch.setenv("VOICEBOX_MLX_CACHE_LIMIT_MB", env)
     assert worker_mlx_cache_limit_mb(role) == expected
+
+
+def test_main_refuses_routes_of_its_workers(monkeypatch):
+    client = _client(monkeypatch, "main")
+    monkeypatch.setenv("VOICEBOX_TTS_URL", "http://127.0.0.1:17494")
+    response = client.get("/tts/stream")
+    assert response.status_code == 404
+    assert "http://127.0.0.1:17494/tts/stream" in response.json()["detail"]
+    with client.websocket_connect("/tts/ws") as ws:
+        with pytest.raises(WebSocketDisconnect) as closed:
+            ws.receive_text()
+    assert closed.value.code == 1008
+    assert "17494" in closed.value.reason
+    # No STT worker: main still serves STT itself; /transcribe is forwarded, never refused.
+    with client.websocket_connect("/stt/ws") as ws:
+        assert ws.receive_text() == "ok"
+    assert client.get("/transcribe").status_code == 200
+    monkeypatch.setenv("VOICEBOX_STT_URL", "http://127.0.0.1:17495")
+    with client.websocket_connect("/stt/ws") as ws:
+        with pytest.raises(WebSocketDisconnect):
+            ws.receive_text()
+    assert client.get("/transcribe").status_code == 200
+
+
+def test_worker_urls_only_restrict_main(monkeypatch):
+    monkeypatch.setenv("VOICEBOX_TTS_URL", "http://127.0.0.1:17494")
+    assert _client(monkeypatch, "all").get("/tts/stream").status_code == 200
+    assert _client(monkeypatch, "tts").get("/tts/stream").status_code == 200
+
+
+def test_health_reports_worker_urls(monkeypatch):
+    from backend.routes.health import health
+
+    monkeypatch.setenv("VOICEBOX_ROLE", "main")
+    monkeypatch.setenv("VOICEBOX_TTS_URL", "http://127.0.0.1:17494/")
+    monkeypatch.delenv("VOICEBOX_STT_URL", raising=False)
+    response = asyncio.run(health())
+    assert (response.tts_url, response.stt_url) == ("http://127.0.0.1:17494", None)

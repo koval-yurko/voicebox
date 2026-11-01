@@ -7,6 +7,8 @@ Local STT and TTS for [LiveKit Agents](https://docs.livekit.io/agents/) 1.8+, th
 
 The agent connects over loopback (`127.0.0.1`), so the API key gate for external `/tts/*` requests does not apply.
 
+With separate TTS and STT processes (the default in the Voicebox YK app), streaming runs on the workers, not on the main server: point `VoiceboxSTT` at the STT worker (`http://127.0.0.1:17495`) and `VoiceboxTTS` at the TTS worker (`http://127.0.0.1:17494`). Settings > General shows both URLs. The main server refuses `/stt/ws` and `/tts/ws` when it has workers.
+
 ## Setup
 
 ```bash

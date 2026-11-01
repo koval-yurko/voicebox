@@ -190,6 +190,8 @@ async def health():
         gpu_compatibility_warning=gpu_compat_warning,
         cloud_enabled=config.is_cloud_enabled(),
         role=roles.get_role(),
+        tts_url=roles.tts_url(),
+        stt_url=roles.stt_url(),
     )
 
 

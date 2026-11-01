@@ -853,6 +853,19 @@
           "health": "Server status",
           "profiles": "List voices",
           "history": "Past generations"
+        },
+        "workers": {
+          "ttsTitle": "TTS worker",
+          "sttTitle": "STT worker",
+          "description": "Streaming runs in its own process at <code>{{url}}</code>. Connect streaming clients such as a LiveKit agent here; the main server does not serve these routes.",
+          "endpoints": {
+            "ttsWs": "Streaming speech (LiveKit)",
+            "ttsStream": "Streaming speech over HTTP",
+            "ttsRender": "Render a full clip",
+            "ttsWarmup": "Load the model ahead",
+            "sttWs": "Streaming transcription (LiveKit)",
+            "transcribe": "Transcribe a file"
+          }
         }
       }
     },

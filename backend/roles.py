@@ -2,7 +2,8 @@
 
 Main owns all state (DB writes, migrations, queue, cleanup). A worker only
 serves its inference routes and refuses the rest, so a wrong URL fails at
-once instead of writing state from the wrong process.
+once instead of writing state from the wrong process. Main with a worker URL
+refuses that worker's own routes, so a call to main never loads a model there.
 """
 
 import os
@@ -19,6 +20,11 @@ _WORKER_PATHS = {
     "stt": {"/stt/ws", "/transcribe"},
 }
 _MODEL_UNLOAD = re.compile(r"/models/[^/]+/unload")
+# Worker routes that main does not forward. /transcribe is not here: main forwards it.
+_WORKER_ONLY_PATHS = {
+    "tts": {"/tts/stream", "/tts/warmup", "/tts/ws", "/tts/render"},
+    "stt": {"/stt/ws"},
+}
 
 
 def set_role(role: str) -> None:
@@ -46,10 +52,18 @@ def is_worker() -> bool:
     return get_role() in _WORKER_PATHS
 
 
+def worker_for_path(path: str) -> str | None:
+    """URL of the worker that serves ``path`` when this main must not run it itself."""
+    for worker, url in (("tts", tts_url()), ("stt", stt_url())):
+        if url and path in _WORKER_ONLY_PATHS[worker]:
+            return url
+    return None
+
+
 def path_allowed(path: str) -> bool:
     worker_paths = _WORKER_PATHS.get(get_role())
     if worker_paths is None:
-        return True
+        return worker_for_path(path) is None
     return path in _SHARED_PATHS or path in worker_paths or bool(_MODEL_UNLOAD.fullmatch(path))
 
 
@@ -60,11 +74,23 @@ class RoleMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] in ("http", "websocket") and not path_allowed(scope["path"]):
+        path = scope.get("path", "")
+        if scope["type"] in ("http", "websocket") and not path_allowed(path):
+            worker = worker_for_path(path)
+            if worker:
+                detail = f"{path} runs on the worker at {worker}, not on main. Call {worker}{path}."
+            else:
+                detail = f"Not served by the {get_role()} worker"
+            if scope["type"] == "websocket" and worker:
+                # Accept first: a close before the handshake reaches the client as HTTP 403 without the reason.
+                await receive()
+                await send({"type": "websocket.accept"})
+                await send({"type": "websocket.close", "code": 1008, "reason": detail[:120]})
+                return
             if scope["type"] == "websocket":
                 response = WebSocketClose(code=1008)
             else:
-                response = JSONResponse({"detail": f"Not served by the {get_role()} worker"}, status_code=404)
+                response = JSONResponse({"detail": detail}, status_code=404)
             await response(scope, receive, send)
             return
         await self.app(scope, receive, send)

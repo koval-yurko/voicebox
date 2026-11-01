@@ -493,6 +493,8 @@ class HealthResponse(BaseModel):
     gpu_compatibility_warning: Optional[str] = None  # Warning if GPU arch unsupported
     cloud_enabled: bool = False  # VOICEBOX_CLOUD_ENABLED — the app shows the Cloud section only when true
     role: str = "all"  # --role; Tauri starts the workers when main reports "main"
+    tts_url: Optional[str] = None  # TTS worker URL when main has one (streaming clients call it directly)
+    stt_url: Optional[str] = None  # STT worker URL when main has one
 
 
 class DirectoryCheck(BaseModel):

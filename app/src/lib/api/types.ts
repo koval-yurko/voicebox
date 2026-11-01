@@ -299,6 +299,8 @@ export interface HealthResponse {
   backend_variant?: string; // "cpu", "cuda", or "rocm"
   supports_rocm?: boolean; // AMD GPU on Windows or Linux (/dev/kfd) — the ROCm backend is applicable
   cloud_enabled?: boolean; // VOICEBOX_CLOUD_ENABLED on the backend — show the Cloud section
+  tts_url?: string | null; // TTS worker URL when the server runs as main with workers
+  stt_url?: string | null; // STT worker URL when the server runs as main with workers
 }
 
 export interface CudaDownloadProgress {
