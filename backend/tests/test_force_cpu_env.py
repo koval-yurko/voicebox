@@ -1,9 +1,9 @@
 """
 Regression tests for the VOICEBOX_FORCE_CPU environment override.
 
-The docs promise (docs/content/docs/developer/tts-generation.mdx) that
+The docs promise (wiki page Dev-TTS-Generation) that
 get_torch_device() layers "VOICEBOX_FORCE_CPU environment override" ahead of
-CUDA/XPU/MPS detection, and gpu-acceleration.mdx tells users to set it to fall
+CUDA/XPU/MPS detection, and users set it to fall
 back to CPU when the bundled PyTorch has no kernels for their GPU.
 
 torch is stubbed through sys.modules so these run without a torch install and

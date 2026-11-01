@@ -5,7 +5,6 @@
 
 # Desktop-only (not needed in web container)
 tauri/
-docs/
 mlx-test/
 scripts/*
 !scripts/rocm-entrypoint.sh

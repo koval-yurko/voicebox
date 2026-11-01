@@ -125,24 +125,6 @@ After starting the backend server:
 ```
 This downloads the OpenAPI schema and generates the TypeScript client in `app/src/lib/api/`
 
-### Convert Assets to Web Formats
-
-To optimize images and videos for the web, run:
-```bash
-bun run convert:assets
-```
-
-This script:
-- Converts PNG → WebP (better compression, same quality)
-- Converts MOV → WebM (VP9 codec, smaller file size)
-- Processes files in `docs/public/`
-- **Deletes original files** after successful conversion
-
-**Requirements:** Install `webp` and `ffmpeg`:
-```bash
-brew install webp ffmpeg
-```
-
 > **Note:** Run this before committing new images or videos to keep the repository size small.
 
 ## Development Workflow
@@ -360,20 +342,20 @@ Releases are managed by maintainers:
 
 ## Troubleshooting
 
-See [docs/content/docs/overview/troubleshooting.mdx](docs/content/docs/overview/troubleshooting.mdx) for common issues and solutions.
+See the [Troubleshooting](https://github.com/koval-yurko/voicebox/wiki/Troubleshooting) wiki page for common issues and solutions.
 
 **Quick fixes:**
 
 - **Backend won't start:** Check Python version (must be 3.12), ensure venv is activated, install dependencies
 - **Tauri build fails:** Ensure Rust is installed, clean build with `cd tauri/src-tauri && cargo clean`
-- **OpenAPI client generation fails:** Ensure backend is running, check `curl http://localhost:17493/openapi.json`
+- **OpenAPI client generation fails:** Ensure backend is running, check `curl http://localhost:17593/openapi.json`
 
 ## Questions?
 
 - Open an issue for bugs or feature requests
 - Check existing issues and discussions
 - Review the codebase to understand patterns
-- See [docs/content/docs/overview/troubleshooting.mdx](docs/content/docs/overview/troubleshooting.mdx) for common issues
+- See the [Troubleshooting](https://github.com/koval-yurko/voicebox/wiki/Troubleshooting) wiki page for common issues
 
 ## Additional Resources
 
