@@ -5,7 +5,22 @@ Local STT and TTS for [LiveKit Agents](https://docs.livekit.io/agents/) 1.8+, th
 - `VoiceboxSTT`: streaming STT over `WS /stt/ws` (protocol: `docs-internal/research/stt-streaming-design.md` sections 7 and 8).
 - `VoiceboxTTS`: streaming TTS over `WS /tts/ws`.
 
-The agent connects over loopback (`127.0.0.1`), so the API key gate for external `/tts/*` requests does not apply.
+On the same Mac the agent connects over loopback (`127.0.0.1`), and the API key gate does not apply.
+
+From another machine, use the public URLs of the Cloudflare Tunnel and an API key (create one with `python3 scripts/voicebox_api_key.py add <name>` in the repo root):
+
+| Process | Public URL |
+|---|---|
+| Main server (profile list) | `https://voice.kovalchuk.win` |
+| STT worker | `https://stt.kovalchuk.win` |
+| TTS worker | `https://tts.kovalchuk.win` |
+
+```python
+VoiceboxSTT(base_url="https://stt.kovalchuk.win", api_key="vbx_...")
+VoiceboxTTS(profile_id="...", base_url="https://tts.kovalchuk.win", api_key="vbx_...")
+```
+
+Both plugins send the key as `Authorization: Bearer <key>`. Without `api_key` they read `VOICEBOX_API_KEY`.
 
 With separate TTS and STT processes (the default in the Voicebox YK app), streaming runs on the workers, not on the main server (`17593`). The plugin defaults point there: `VoiceboxSTT` at the STT worker (`http://127.0.0.1:17495`) and `VoiceboxTTS` at the TTS worker (`http://127.0.0.1:17494`). Settings > General shows both URLs. The main server refuses `/stt/ws` and `/tts/ws` when it has workers. With 1 Voicebox process (`--role all`, or the setting off), pass `base_url="http://127.0.0.1:17593"` to both.
 
@@ -42,6 +57,7 @@ session = AgentSession(
 | `base_url` | `http://127.0.0.1:17495` | Voicebox STT worker, or a 1-process server. |
 | `vad` | `True` | `True`: the server VAD opens and closes segments. `False`: a segment closes only when the agent flushes the stream. |
 | `interim` | `True` | Ask for interim text. `capabilities.interim_results` follows the server `ready` capabilities. |
+| `api_key` | `$VOICEBOX_API_KEY` | API key for a public URL. Not needed on `127.0.0.1`. |
 | `delay_ms` | `None` | `voxtral-realtime-4B` only: transcription delay, a multiple of 80 from 80 to 1200, or 2400. Lower is faster with more errors. `None` uses the server default (240). |
 
 `VoiceboxTTS` options:
@@ -54,6 +70,7 @@ session = AgentSession(
 | `model_size` | `1.7B` | Model size for engines with sizes (`1.7B` or `0.6B` for Qwen). |
 | `interval_ms` | `320` | Audio length per streamed chunk. |
 | `base_url` | `http://127.0.0.1:17494` | Voicebox TTS worker, or a 1-process server. |
+| `api_key` | `$VOICEBOX_API_KEY` | API key for a public URL. Not needed on `127.0.0.1`. |
 
 Event mapping: `speech_start` → `START_OF_SPEECH`, `interim` → `INTERIM_TRANSCRIPT`, `final` → `FINAL_TRANSCRIPT`, `speech_end` → `END_OF_SPEECH`.
 

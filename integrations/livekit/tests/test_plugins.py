@@ -33,8 +33,10 @@ class FakeVoicebox:
         self.audio_bytes = 0
         self.tts_text: list[str] = []
         self.tts_closed = asyncio.Event()
+        self.auth: list[str | None] = []
 
     async def stt_ws(self, request: web.Request) -> web.WebSocketResponse:
+        self.auth.append(request.headers.get("Authorization"))
         ws = web.WebSocketResponse()
         await ws.prepare(request)
         segment = 0
@@ -78,6 +80,7 @@ class FakeVoicebox:
         return ws
 
     async def tts_ws(self, request: web.Request) -> web.WebSocketResponse:
+        self.auth.append(request.headers.get("Authorization"))
         ws = web.WebSocketResponse()
         await ws.prepare(request)
         try:
@@ -250,3 +253,26 @@ async def test_tts_aclose_closes_the_socket():
             await asyncio.wait_for(fake.tts_closed.wait(), 2)
     finally:
         await runner.cleanup()
+
+
+async def test_api_key_sent_as_bearer(monkeypatch):
+    """Through the API key gate (a public URL) both plugins send Authorization: Bearer <key>."""
+    monkeypatch.setenv("VOICEBOX_API_KEY", "env-key")
+    fake = FakeVoicebox()
+    runner, url = await _serve(fake)
+    try:
+        async with utils.http_context.open():
+            tts = VoiceboxTTS(profile_id="p1", base_url=url, api_key="arg-key")
+            stream = tts.stream()
+            stream.push_text("Hi.")
+            stream.end_input()
+            [ev async for ev in stream]
+            stt_stream = VoiceboxSTT(base_url=url).stream()
+            for _ in range(100):  # the STT stream connects in the background
+                if len(fake.auth) == 2:
+                    break
+                await asyncio.sleep(0.02)
+            await stt_stream.aclose()
+    finally:
+        await runner.cleanup()
+    assert fake.auth == ["Bearer arg-key", "Bearer env-key"]

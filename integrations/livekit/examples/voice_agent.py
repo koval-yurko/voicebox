@@ -9,6 +9,9 @@ Environment (all optional):
     VOICEBOX_STT_URL     STT worker (default http://127.0.0.1:17495)
     VOICEBOX_TTS_URL     TTS worker (default http://127.0.0.1:17494)
                          With 1 Voicebox process (--role all), set both to VOICEBOX_URL.
+                         Through the Cloudflare Tunnel: https://voice.kovalchuk.win,
+                         https://stt.kovalchuk.win and https://tts.kovalchuk.win.
+    VOICEBOX_API_KEY     API key, needed for the public URLs (not for 127.0.0.1)
     VOICEBOX_STT_MODEL   default qwen-asr-0.6B
     VOICEBOX_PROFILE_ID  TTS voice profile (default: the first profile of the server)
     OLLAMA_MODEL         answer with this local Ollama model; without it the agent
@@ -47,7 +50,9 @@ ECHO_TAIL = (
 def default_profile_id() -> str:
     if profile_id := os.getenv("VOICEBOX_PROFILE_ID"):
         return profile_id
-    with urllib.request.urlopen(f"{VOICEBOX_URL}/profiles", timeout=10) as resp:
+    headers = {"Authorization": f"Bearer {key}"} if (key := os.getenv("VOICEBOX_API_KEY")) else {}
+    request = urllib.request.Request(f"{VOICEBOX_URL}/profiles", headers=headers)
+    with urllib.request.urlopen(request, timeout=10) as resp:
         profiles = json.load(resp)
     if not profiles:
         raise SystemExit(f"No voice profiles on {VOICEBOX_URL}. Create one in Voicebox first.")

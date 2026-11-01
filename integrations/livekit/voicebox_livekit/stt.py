@@ -30,7 +30,7 @@ from livekit.agents import (
 )
 from livekit.agents.utils import AudioBuffer, is_given
 
-from ._common import ensure_ws_url
+from ._common import auth_headers, ensure_ws_url
 
 logger = logging.getLogger("voicebox_livekit.stt")
 
@@ -49,6 +49,7 @@ class STTOptions:
     max_segment_s: float
     delay_ms: int | None
     base_url: str
+    api_key: str | None
 
     def start_message(self, *, language: str | None, vad: bool | None = None) -> dict:
         msg = {
@@ -75,6 +76,7 @@ class VoiceboxSTT(stt.STT):
         model: str | None = "qwen-asr-0.6B",
         language: str | None = None,
         base_url: str = DEFAULT_BASE_URL,
+        api_key: str | None = None,
         vad: bool = True,
         interim: bool = True,
         interim_interval_ms: int = 500,
@@ -89,7 +91,9 @@ class VoiceboxSTT(stt.STT):
             model: Voicebox STT model name, e.g. ``qwen-asr-0.6B`` or ``whisper-turbo``.
                 ``None`` uses the default model of the Voicebox capture settings.
             language: ISO code. ``None`` lets the model detect the language.
-            base_url: Voicebox server URL (``http://`` or ``ws://``).
+            base_url: Voicebox server URL (``http://``, ``https://``, ``ws://`` or ``wss://``).
+            api_key: Voicebox API key, needed through the API key gate (a public URL).
+                Default: the ``VOICEBOX_API_KEY`` environment variable.
             vad: ``True``: the server VAD opens and closes segments. ``False``: segments
                 close only when the agent flushes the stream (agent VAD / turn detector).
             interim: ask the server for interim text when the model can make it.
@@ -118,6 +122,7 @@ class VoiceboxSTT(stt.STT):
             max_segment_s=max_segment_s,
             delay_ms=delay_ms,
             base_url=base_url,
+            api_key=api_key,
         )
         self._session = http_session
         self._streams = weakref.WeakSet[SpeechStream]()
@@ -149,7 +154,7 @@ class VoiceboxSTT(stt.STT):
     async def _connect(self, timeout: float) -> aiohttp.ClientWebSocketResponse:
         url = ensure_ws_url(self._opts.base_url) + "/stt/ws"
         try:
-            return await asyncio.wait_for(self._ensure_session().ws_connect(url), timeout)
+            return await asyncio.wait_for(self._ensure_session().ws_connect(url, headers=auth_headers(self._opts.api_key)), timeout)
         except asyncio.TimeoutError as e:
             raise APITimeoutError("Voicebox STT connection timed out") from e
         except aiohttp.WSServerHandshakeError as e:

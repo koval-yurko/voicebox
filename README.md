@@ -381,7 +381,7 @@ await voicebox_speak({
 
 **Use cases:** agent dev loops (voice in, voice out), game dialogue, podcast production, accessibility tools, voice assistants, content automation.
 
-Full API documentation available at `http://127.0.0.1:17493/docs` (see the [API Reference](https://github.com/koval-yurko/voicebox/wiki/API-Reference) wiki page).
+Full API documentation available at `http://127.0.0.1:17593/docs` (see the [API Reference](https://github.com/koval-yurko/voicebox/wiki/API-Reference) wiki page).
 
 **Streaming and worker ports.** The desktop app runs speech generation and transcription in 2 worker processes by default: TTS on `http://127.0.0.1:17494` and STT on `http://127.0.0.1:17495` (Settings → General lists them with their routes). All the calls above go to the main server, which hands the work to the workers. The streaming routes run only on the workers: `WS /tts/ws`, `POST /tts/stream` and `POST /tts/render` on the TTS worker, and `WS /stt/ws` on the STT worker. The main server refuses them with an error that names the worker URL. The [LiveKit plugins](integrations/livekit) use the worker ports by default. With 1 process (`--role all`, or the setting off), every route is on the main server.
 

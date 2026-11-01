@@ -6,6 +6,7 @@ Usage: backend/venv/bin/python scripts/test_api_keys.py
 """
 
 import json
+import os
 import sys
 import tempfile
 import time
@@ -65,24 +66,51 @@ r = local.post("/tts/stream", headers={**CF, "Authorization": f"Bearer {KEY}"}, 
 check("CF, valid Bearer key -> passes auth", r.status_code not in (401, 403), r.status_code)
 r = local.post("/tts/stream", headers={**CF, "X-API-Key": KEY}, json={})
 check("CF, valid X-API-Key -> passes auth", r.status_code not in (401, 403), r.status_code)
-r = local.get("/health", headers={**CF, "Authorization": f"Bearer {KEY}"})
-check("CF, non-/tts route with key -> 403", r.status_code == 403, r.status_code)
-r = local.post("/shutdown", headers={**CF, "Authorization": f"Bearer {KEY}"})
-check("CF, /shutdown with key -> 403", r.status_code == 403, r.status_code)
+r = local.get("/profiles", headers=CF)
+check("CF, /profiles no key -> 401", r.status_code == 401, r.status_code)
+r = local.get("/profiles", headers={**CF, "X-API-Key": KEY})
+check("CF, /profiles with key -> passes auth", r.status_code not in (401, 403), r.status_code)
+r = local.post("/shutdown", headers=CF)
+check("CF, /shutdown no key -> 401", r.status_code == 401, r.status_code)
+r = local.get("/mcp/", headers=CF)
+check("CF, /mcp no key -> 401", r.status_code == 401, r.status_code)
 r = local.get("/mcp/", headers={**CF, "Authorization": f"Bearer {KEY}"})
-check("CF, /mcp with key -> 403", r.status_code == 403, r.status_code)
+check("CF, /mcp with key -> passes auth", r.status_code not in (401, 403), r.status_code)
 
-# 3. Non-loopback client IP without Cloudflare headers (remote mode / LAN).
+# 3. Health checks and API docs are public; look-alike paths are not.
+for path in ("/health", "/docs", "/redoc", "/openapi.json"):
+    r = local.get(path, headers=CF)
+    check(f"CF, {path} no key -> passes", r.status_code not in (401, 403), r.status_code)
+for path in ("/healthz", "/health/filesystem", "/docs/oauth2-redirect"):
+    r = local.get(path, headers=CF)
+    check(f"CF, {path} no key -> 401", r.status_code == 401, r.status_code)
+schemes = local.get("/openapi.json").json().get("components", {}).get("securitySchemes", {})
+check("OpenAPI declares the X-API-Key scheme", schemes.get("APIKey", {}).get("name") == "X-API-Key", schemes)
+check("role all: OpenAPI lists /tts/stream", "/tts/stream" in app.openapi()["paths"])
+
+# Main with workers: worker-only routes are hidden from main's OpenAPI.
+os.environ.update(VOICEBOX_ROLE="main", VOICEBOX_TTS_URL="http://127.0.0.1:17494", VOICEBOX_STT_URL="http://127.0.0.1:17495")
+app.openapi_schema = None
+paths = app.openapi()["paths"]
+check("main: OpenAPI hides /tts/stream and /stt/ws", "/tts/stream" not in paths and "/stt/ws" not in paths)
+check("main: OpenAPI keeps /profiles and /transcribe", "/profiles" in paths and "/transcribe" in paths)
+for k in ("VOICEBOX_ROLE", "VOICEBOX_TTS_URL", "VOICEBOX_STT_URL"):
+    os.environ.pop(k)
+app.openapi_schema = None
+
+# 4. Non-loopback client IP without Cloudflare headers (remote mode / LAN).
 r = remote_ip.get("/health")
-check("LAN client, /health -> 403", r.status_code == 403, r.status_code)
+check("LAN client, /health -> passes", r.status_code not in (401, 403), r.status_code)
+r = remote_ip.get("/profiles")
+check("LAN client, /profiles no key -> 401", r.status_code == 401, r.status_code)
 r = remote_ip.post("/tts/stream", json={})
 check("LAN client, /tts no key -> 401", r.status_code == 401, r.status_code)
 
-# 4. Local requests without Cloudflare headers keep working without a key.
+# 5. Local requests without Cloudflare headers keep working without a key.
 r = local.post("/tts/stream", json={})
 check("local /tts without key -> passes auth", r.status_code not in (401, 403), r.status_code)
 
-# 5. WebSocket.
+# 6. WebSocket.
 st = ws_status(local, CF)
 check("WS via CF, no key -> rejected", st[0] == "rejected", st)
 st = ws_status(local, {**CF, "Authorization": "Bearer wrong"})
@@ -92,7 +120,7 @@ check("WS via CF, valid key -> accepted", st[0] == "accepted", st)
 st = ws_status(local, {})
 check("WS local, no key -> accepted", st[0] == "accepted", st)
 
-# 6. Revoke by rewriting the file: picked up without restart.
+# 7. Revoke by rewriting the file: picked up without restart.
 time.sleep(0.01)
 (tmp / "api_keys.json").write_text(json.dumps({"keys": []}))
 r = local.post("/tts/stream", headers={**CF, "Authorization": f"Bearer {KEY}"}, json={})

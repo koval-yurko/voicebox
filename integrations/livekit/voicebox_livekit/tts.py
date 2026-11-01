@@ -25,7 +25,7 @@ from livekit.agents import (
     utils,
 )
 
-from ._common import ensure_ws_url
+from ._common import auth_headers, ensure_ws_url
 
 logger = logging.getLogger("voicebox_livekit.tts")
 
@@ -43,6 +43,7 @@ class TTSOptions:
     instruct: str | None
     interval_ms: int
     base_url: str
+    api_key: str | None
 
     def start_message(self) -> dict:
         msg = {
@@ -71,6 +72,7 @@ class VoiceboxTTS(tts.TTS):
         interval_ms: int = 320,
         sample_rate: int = DEFAULT_SAMPLE_RATE,
         base_url: str = DEFAULT_BASE_URL,
+        api_key: str | None = None,
         http_session: aiohttp.ClientSession | None = None,
     ) -> None:
         """Local streaming TTS through a Voicebox server.
@@ -82,6 +84,9 @@ class VoiceboxTTS(tts.TTS):
             model_size: model size for engines with sizes (``1.7B`` or ``0.6B`` for Qwen).
             interval_ms: audio length per streamed chunk.
             sample_rate: output rate of the engine (24000 for Qwen).
+            base_url: Voicebox TTS worker URL (``http://``, ``https://``, ``ws://`` or ``wss://``).
+            api_key: Voicebox API key, needed through the API key gate (a public URL).
+                Default: the ``VOICEBOX_API_KEY`` environment variable.
         """
         super().__init__(
             capabilities=tts.TTSCapabilities(streaming=True),
@@ -96,6 +101,7 @@ class VoiceboxTTS(tts.TTS):
             instruct=instruct,
             interval_ms=interval_ms,
             base_url=base_url,
+            api_key=api_key,
         )
         self._session = http_session
         self._streams = weakref.WeakSet[SynthesizeStream]()
@@ -139,7 +145,7 @@ class SynthesizeStream(tts.SynthesizeStream):
         url = ensure_ws_url(opts.base_url) + "/tts/ws"
         timeout = self._conn_options.timeout
         try:
-            ws = await asyncio.wait_for(self._vb_tts._ensure_session().ws_connect(url), timeout)
+            ws = await asyncio.wait_for(self._vb_tts._ensure_session().ws_connect(url, headers=auth_headers(opts.api_key)), timeout)
         except asyncio.TimeoutError as e:
             raise APITimeoutError("Voicebox TTS connection timed out") from e
         except (aiohttp.ClientError, OSError) as e:
