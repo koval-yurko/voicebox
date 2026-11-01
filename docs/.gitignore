@@ -24,3 +24,5 @@ yarn-error.log*
 .env*.local
 .vercel
 next-env.d.ts
+# GitHub wiki build output (scripts/build-wiki.mjs)
+/wiki-out
