@@ -799,6 +799,12 @@
         "runningDescription": "Server will continue running when app closes",
         "stoppedDescription": "Server will stop when app closes"
       },
+      "workerProcesses": {
+        "title": "Separate TTS and STT processes",
+        "description": "Run speech generation and transcription in their own server processes, so dictation does not wait for a long generation. Restart the app after changing.",
+        "updatedTitle": "Setting updated",
+        "restartDescription": "Restart the app to apply."
+      },
       "networkAccess": {
         "title": "Allow network access",
         "description": "Makes the server accessible from other devices on your network. Restart the app after changing.",

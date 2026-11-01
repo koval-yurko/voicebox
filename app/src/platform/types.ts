@@ -56,7 +56,11 @@ export interface ServerLogEntry {
 }
 
 export interface PlatformLifecycle {
-  startServer(remote?: boolean, modelsDir?: string | null): Promise<string>;
+  startServer(
+    remote?: boolean,
+    modelsDir?: string | null,
+    workerProcesses?: boolean,
+  ): Promise<string>;
   stopServer(): Promise<void>;
   restartServer(modelsDir?: string | null): Promise<string>;
   setKeepServerRunning(keep: boolean): Promise<void>;

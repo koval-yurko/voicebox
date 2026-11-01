@@ -36,6 +36,8 @@ export function GeneralPage() {
   const setKeepServerRunningOnClose = useServerStore((state) => state.setKeepServerRunningOnClose);
   const mode = useServerStore((state) => state.mode);
   const setMode = useServerStore((state) => state.setMode);
+  const workerProcesses = useServerStore((state) => state.workerProcesses);
+  const setWorkerProcesses = useServerStore((state) => state.setWorkerProcesses);
   const { toast } = useToast();
   const { data: health, isLoading, error: healthError } = useServerHealth();
 
@@ -171,6 +173,27 @@ export function GeneralPage() {
             />
           }
         />
+
+        {platform.metadata.isTauri && (
+          <SettingRow
+            title={t('settings.general.workerProcesses.title')}
+            description={t('settings.general.workerProcesses.description')}
+            htmlFor="workerProcesses"
+            action={
+              <Toggle
+                id="workerProcesses"
+                checked={workerProcesses}
+                onCheckedChange={(checked: boolean) => {
+                  setWorkerProcesses(checked);
+                  toast({
+                    title: t('settings.general.workerProcesses.updatedTitle'),
+                    description: t('settings.general.workerProcesses.restartDescription'),
+                  });
+                }}
+              />
+            }
+          />
+        )}
 
         {platform.metadata.isTauri && (
           <SettingRow

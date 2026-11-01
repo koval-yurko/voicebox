@@ -87,3 +87,11 @@ def test_completed_clears_stale_error(tmp_path):
 
     assert result.status == "completed"
     assert result.error is None
+
+
+@pytest.mark.parametrize("role", ["all", "main", "stt"])
+def test_health_reports_role(monkeypatch, role):
+    from backend.routes.health import health
+
+    monkeypatch.setenv("VOICEBOX_ROLE", role)
+    assert asyncio.run(health()).role == role

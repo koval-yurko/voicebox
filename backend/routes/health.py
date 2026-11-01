@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from .. import config, models
+from .. import config, models, roles
 from ..services import tts
 from ..database import get_db
 from ..utils.platform_detect import get_backend_type, is_amd_rocm_capable
@@ -189,6 +189,7 @@ async def health():
         supports_rocm=is_amd_rocm_capable(),
         gpu_compatibility_warning=gpu_compat_warning,
         cloud_enabled=config.is_cloud_enabled(),
+        role=roles.get_role(),
     )
 
 

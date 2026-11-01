@@ -492,6 +492,7 @@ class HealthResponse(BaseModel):
     supports_rocm: bool = False  # AMD GPU on Windows or Linux (/dev/kfd) — ROCm backend applicable
     gpu_compatibility_warning: Optional[str] = None  # Warning if GPU arch unsupported
     cloud_enabled: bool = False  # VOICEBOX_CLOUD_ENABLED — the app shows the Cloud section only when true
+    role: str = "all"  # --role; Tauri starts the workers when main reports "main"
 
 
 class DirectoryCheck(BaseModel):

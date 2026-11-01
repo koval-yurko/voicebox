@@ -199,9 +199,131 @@ fn check_health(port: u16) -> bool {
     }
 }
 
+/// Inference workers next to main (`--role main`). The ports are fixed, so a
+/// reused main finds its workers on the same URLs.
+const WORKERS: [(&str, u16); 2] = [("tts", 17494), ("stt", 17495)];
+
+/// Role reported by a healthy Voicebox server on `port`, or None.
+async fn server_role(port: u16) -> Option<String> {
+    let body: serde_json::Value = reqwest::Client::new()
+        .get(format!("http://127.0.0.1:{}/health", port))
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await
+        .ok()?
+        .json()
+        .await
+        .ok()?;
+    if body.get("status")?.as_str()? != "healthy" {
+        return None;
+    }
+    Some(body.get("role").and_then(|v| v.as_str()).unwrap_or("all").to_string())
+}
+
+/// Start the TTS and STT workers that are not already running, then wait for
+/// their /health. Call only when main runs with `--role main`.
+async fn start_workers(app: &tauri::AppHandle, state: &State<'_, ServerState>) -> Result<(), String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let data_dir = data_dir.to_str().ok_or("Invalid data dir path")?.to_string();
+    // shortcut: a reused main has no recorded exe, so its workers use the bundled
+    // sidecar (right on macOS, the only target); record the exe if GPU builds need it.
+    let exe = state.backend_exe.lock().unwrap().clone();
+    let models_dir = state.models_dir.lock().unwrap().clone();
+    let parent_pid = std::process::id().to_string();
+
+    for (role, port) in WORKERS {
+        if server_role(port).await.as_deref() == Some(role) {
+            println!("Reusing {} worker on port {}", role, port);
+            continue;
+        }
+        let mut cmd = match &exe {
+            Some(path) => app
+                .shell()
+                .command(path.to_str().ok_or("Invalid backend path")?)
+                .current_dir(path.parent().ok_or("Invalid backend path")?),
+            None => app
+                .shell()
+                .sidecar("voicebox-server")
+                .map_err(|e| format!("Failed to get sidecar: {}", e))?,
+        };
+        let port_str = port.to_string();
+        cmd = cmd.args(["--role", role, "--port", &port_str, "--data-dir", &data_dir, "--parent-pid", &parent_pid]);
+        if let Some(ref dir) = models_dir {
+            cmd = cmd.env("VOICEBOX_MODELS_DIR", dir);
+        }
+        println!("Starting {} worker on port {}", role, port);
+        let (mut rx, child) = cmd
+            .spawn()
+            .map_err(|e| format!("Failed to start the {} worker: {}", role, e))?;
+        state.workers.lock().unwrap().push(child);
+
+        // Read the output, or the worker blocks when the pipe is full.
+        let app_handle = app.clone();
+        tokio::spawn(async move {
+            use tauri_plugin_shell::process::CommandEvent;
+            while let Some(event) = rx.recv().await {
+                let (stream, line) = match event {
+                    CommandEvent::Stdout(line) => ("stdout", String::from_utf8_lossy(&line).trim_end().to_string()),
+                    CommandEvent::Stderr(line) => ("stderr", String::from_utf8_lossy(&line).trim_end().to_string()),
+                    CommandEvent::Terminated(p) => ("stderr", format!("worker exited (code {:?})", p.code)),
+                    _ => continue,
+                };
+                let line = format!("[{}] {}", role, line);
+                println!("{}", line);
+                let _ = app_handle.emit("server-log", serde_json::json!({ "stream": stream, "line": line }));
+            }
+        });
+    }
+
+    let deadline = tokio::time::Instant::now() + tokio::time::Duration::from_secs(120);
+    for (role, port) in WORKERS {
+        while server_role(port).await.as_deref() != Some(role) {
+            if tokio::time::Instant::now() > deadline {
+                return Err(format!("The {} worker did not start on port {} within 120 seconds", role, port));
+            }
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+    }
+    println!("Workers are ready");
+    Ok(())
+}
+
+/// Kill the workers this app started, ask any other server on a worker port
+/// (left by an earlier session) to shut down, and wait until the ports are free.
+/// Blocking: call it from the exit handler or through spawn_blocking.
+fn stop_workers(children: Vec<tauri_plugin_shell::process::CommandChild>) {
+    for child in children {
+        let _ = child.kill();
+    }
+    let Ok(client) = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+    else {
+        return;
+    };
+    for (_, port) in WORKERS {
+        let _ = client.post(format!("http://127.0.0.1:{}/shutdown", port)).send();
+        for _ in 0..20 {
+            if client.get(format!("http://127.0.0.1:{}/health", port)).send().is_err() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    }
+}
+
 struct ServerState {
     child: Mutex<Option<tauri_plugin_shell::process::CommandChild>>,
     server_pid: Mutex<Option<u32>>,
+    /// Run TTS and STT in worker processes; main gets `--role main`.
+    worker_processes: Mutex<bool>,
+    /// GPU binary main was started from, so the workers use the same one.
+    /// None: the bundled sidecar.
+    backend_exe: Mutex<Option<std::path::PathBuf>>,
+    workers: Mutex<Vec<tauri_plugin_shell::process::CommandChild>>,
     keep_running_on_close: Mutex<bool>,
     models_dir: Mutex<Option<String>>,
     /// Override the backend selection: Some("cpu") forces the CPU sidecar even
@@ -265,6 +387,24 @@ async fn probe_binary_version(exe: &std::path::Path, cwd: &std::path::Path) -> O
 
 #[command]
 async fn start_server(
+    app: tauri::AppHandle,
+    state: State<'_, ServerState>,
+    remote: Option<bool>,
+    models_dir: Option<String>,
+    worker_processes: Option<bool>,
+) -> Result<String, String> {
+    if let Some(on) = worker_processes {
+        *state.worker_processes.lock().unwrap() = on;
+    }
+    let url = start_main(app.clone(), state.clone(), remote, models_dir).await?;
+    // Ask the server, not the setting: a reused main keeps the role it started with.
+    if server_role(SERVER_PORT).await.as_deref() == Some("main") {
+        start_workers(&app, &state).await?;
+    }
+    Ok(url)
+}
+
+async fn start_main(
     app: tauri::AppHandle,
     state: State<'_, ServerState>,
     remote: Option<bool>,
@@ -572,6 +712,14 @@ async fn start_server(
     let rocm_binary = if pin_cuda { None } else { rocm_binary };
     let cuda_binary = if pin_rocm { None } else { cuda_binary };
 
+    let worker_args: Vec<String> = if *state.worker_processes.lock().unwrap() {
+        let url = |i: usize| format!("http://127.0.0.1:{}", WORKERS[i].1);
+        vec!["--role".into(), "main".into(), "--tts-url".into(), url(0), "--stt-url".into(), url(1)]
+    } else {
+        Vec::new()
+    };
+    *state.backend_exe.lock().unwrap() = None;
+
     // If ROCm binary exists, launch it from the onedir directory.
     // If CUDA binary exists, launch it from the onedir directory.
     // .current_dir() is critical: PyInstaller onedir expects all DLLs and
@@ -585,10 +733,11 @@ async fn start_server(
             let mut cmd = app.shell().command(rocm_path.to_str().unwrap());
             cmd = cmd.current_dir(rocm_dir);
             cmd = cmd.args(["--data-dir", &data_dir_str, "--port", &port_str, "--parent-pid", &parent_pid_str]);
+            cmd = cmd.args(&worker_args);
             if is_remote { cmd = cmd.args(["--host", "0.0.0.0"]); }
             if let Some(ref dir) = effective_models_dir { cmd = cmd.env("VOICEBOX_MODELS_DIR", dir); }
             match cmd.spawn() {
-                Ok(r) => { gpu_spawn = Some(Ok(r)); }
+                Ok(r) => { gpu_spawn = Some(Ok(r)); *state.backend_exe.lock().unwrap() = Some(rocm_path.clone()); }
                 Err(e) => { println!("ROCm spawn failed ({}), trying CUDA/CPU fallback", e); }
             }
         }
@@ -600,10 +749,11 @@ async fn start_server(
                 let mut cmd = app.shell().command(cuda_path.to_str().unwrap());
                 cmd = cmd.current_dir(cuda_dir);
                 cmd = cmd.args(["--data-dir", &data_dir_str, "--port", &port_str, "--parent-pid", &parent_pid_str]);
+                cmd = cmd.args(&worker_args);
                 if is_remote { cmd = cmd.args(["--host", "0.0.0.0"]); }
                 if let Some(ref dir) = effective_models_dir { cmd = cmd.env("VOICEBOX_MODELS_DIR", dir); }
                 match cmd.spawn() {
-                    Ok(r) => { gpu_spawn = Some(Ok(r)); }
+                    Ok(r) => { gpu_spawn = Some(Ok(r)); *state.backend_exe.lock().unwrap() = Some(cuda_path.clone()); }
                     Err(e) => { println!("CUDA spawn failed ({}), falling back to CPU", e); }
                 }
             }
@@ -614,6 +764,7 @@ async fn start_server(
         } else {
             // Fall back to bundled CPU sidecar
             sidecar = sidecar.args(["--data-dir", &data_dir_str, "--port", &port_str, "--parent-pid", &parent_pid_str]);
+            sidecar = sidecar.args(&worker_args);
             if is_remote { sidecar = sidecar.args(["--host", "0.0.0.0"]); }
             if let Some(ref dir) = effective_models_dir { sidecar = sidecar.env("VOICEBOX_MODELS_DIR", dir); }
             println!("Spawning bundled CPU server process...");
@@ -623,6 +774,7 @@ async fn start_server(
         // Override forces CPU — use bundled sidecar, GPU binary stays on disk
         println!("Backend override=cpu: using bundled CPU sidecar");
         sidecar = sidecar.args(["--data-dir", &data_dir_str, "--port", &port_str, "--parent-pid", &parent_pid_str]);
+        sidecar = sidecar.args(&worker_args);
         if is_remote {
             sidecar = sidecar.args(["--host", "0.0.0.0"]);
         }
@@ -830,6 +982,8 @@ async fn start_server(
 async fn stop_server(state: State<'_, ServerState>) -> Result<(), String> {
     let pid = state.server_pid.lock().unwrap().take();
     let _child = state.child.lock().unwrap().take();
+    let workers: Vec<_> = state.workers.lock().unwrap().drain(..).collect();
+    let _ = tokio::task::spawn_blocking(move || stop_workers(workers)).await;
     
     if let Some(pid) = pid {
         println!("stop_server: Stopping server with PID: {}", pid);
@@ -902,7 +1056,7 @@ async fn restart_server(
 
     // Start server again (will auto-detect GPU binary and use stored models_dir)
     println!("restart_server: starting server...");
-    start_server(app, state.clone(), None, None).await
+    start_server(app, state.clone(), None, None, None).await
 }
 
 #[command]
@@ -1405,6 +1559,9 @@ pub fn run() {
         .manage(ServerState {
             child: Mutex::new(None),
             server_pid: Mutex::new(None),
+            worker_processes: Mutex::new(true),
+            backend_exe: Mutex::new(None),
+            workers: Mutex::new(Vec::new()),
             keep_running_on_close: Mutex::new(false),
             models_dir: Mutex::new(None),
             backend_override: Mutex::new(None),
@@ -1631,18 +1788,24 @@ pub fn run() {
                             .timeout(std::time::Duration::from_secs(2))
                             .build()
                             .unwrap();
-                        match client
-                            .post(&format!("http://127.0.0.1:{}/watchdog/disable", SERVER_PORT))
-                            .send()
-                        {
-                            Ok(resp) => println!("Watchdog disable response: {}", resp.status()),
-                            Err(e) => eprintln!("Failed to disable watchdog: {}", e),
+                        for port in std::iter::once(SERVER_PORT).chain(WORKERS.map(|(_, p)| p)) {
+                            match client
+                                .post(&format!("http://127.0.0.1:{}/watchdog/disable", port))
+                                .send()
+                            {
+                                Ok(resp) => println!("Watchdog disable response ({}): {}", port, resp.status()),
+                                Err(e) => eprintln!("Failed to disable watchdog on port {}: {}", port, e),
+                            }
                         }
                     } else {
                         // Server will self-terminate via parent-pid watchdog when
                         // this process exits. On Unix, also send SIGTERM for
                         // immediate cleanup.
                         println!("RunEvent::Exit - server will self-terminate via watchdog");
+                        // Only workers of a server this app started or reused, not a dev setup.
+                        if has_pid {
+                            stop_workers(state.workers.lock().unwrap().drain(..).collect());
+                        }
 
                         #[cfg(unix)]
                         {
