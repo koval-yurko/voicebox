@@ -170,6 +170,8 @@ async def update_generation_status(
         generation.duration = duration
     if error is not None:
         generation.error = error
+    elif status == "completed":
+        generation.error = None  # drop a stale error, e.g. from another process's startup cleanup
 
     db.commit()
     db.refresh(generation)

@@ -179,6 +179,7 @@ Today Tauri starts 1 server on 17593 (`tauri/src-tauri/src/main.rs:124`, spawn a
 
 1. **Remove the built-in LLM.** Done 2026-11-01. See "Remove the built-in LLM".
 2. **Add `--role main|tts|stt|all`.** Route allow-list per role. Workers skip cleanup, migrations, seeds, GPU auto-update and LLM bootstrap. Clear `error` on completion. Unit tests per role.
+   Done 2026-11-01. `backend/roles.py` holds the role (env `VOICEBOX_ROLE`, set by `--role` in `server.py` and `main.py`) and `RoleMiddleware`. A worker answers 404 for HTTP paths outside its list and closes other WebSockets with code 1008. Both workers also serve `/shutdown` and `/watchdog/disable`. `init_db()` in a worker only opens the DB. `_run_main_startup()` in `app.py` holds the state steps (queue, stale cleanup, LLM bootstrap, CUDA/ROCm update). `--role main` still serves every route and runs TTS and STT itself until steps 3 and 4. Tests: `backend/tests/test_roles.py`.
 3. **STT worker and forwarding.** Main sends `/transcribe` and capture transcription to the STT worker. Main model status asks the worker.
 4. **TTS worker and forwarding.** Add `/tts/render`. Main sends `run_generation` work to the TTS worker. Decide if main forwards `/tts/stream` and `/tts/ws`. Check the voice prompt cache writes (atomic file write).
 5. **Tauri process manager.** Start, health check, stop and restart for 3 processes, and the on/off setting.

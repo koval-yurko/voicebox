@@ -1,0 +1,89 @@
+"""
+Tests for --role (backend/roles.py): route allow-list per role, worker DB
+init without migrations, and the stale error cleared on completion.
+"""
+
+import asyncio
+import sqlite3
+
+import pytest
+from fastapi import FastAPI, WebSocket
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+
+from backend import config, roles
+from backend.database import Base, Generation, VoiceProfile, session as db_session
+from backend.services.history import update_generation_status
+
+
+def _client(monkeypatch, role):
+    monkeypatch.setenv("VOICEBOX_ROLE", role)
+    app = FastAPI()
+    app.add_middleware(roles.RoleMiddleware)
+    for path in ("/health", "/profiles", "/transcribe", "/tts/stream", "/models/status", "/models/qwen-tts-1.7B/unload"):
+        app.add_api_route(path, lambda: {"ok": True}, methods=["GET"])
+    for path in ("/tts/ws", "/stt/ws"):
+
+        async def ws_ok(ws: WebSocket):
+            await ws.accept()
+            await ws.send_text("ok")
+            await ws.close()
+
+        app.add_api_websocket_route(path, ws_ok)
+    return TestClient(app)
+
+
+@pytest.mark.parametrize(
+    "role, allowed, refused",
+    [
+        ("all", ["/health", "/profiles", "/transcribe", "/tts/stream"], []),
+        ("main", ["/health", "/profiles", "/transcribe", "/tts/stream"], []),
+        ("tts", ["/health", "/tts/stream", "/models/status", "/models/qwen-tts-1.7B/unload"], ["/profiles", "/transcribe"]),
+        ("stt", ["/health", "/transcribe", "/models/status"], ["/profiles", "/tts/stream"]),
+    ],
+)
+def test_http_allow_list(monkeypatch, role, allowed, refused):
+    client = _client(monkeypatch, role)
+    for path in allowed:
+        assert client.get(path).status_code == 200, path
+    for path in refused:
+        assert client.get(path).status_code == 404, path
+
+
+@pytest.mark.parametrize("role, allowed, refused", [("tts", "/tts/ws", "/stt/ws"), ("stt", "/stt/ws", "/tts/ws")])
+def test_websocket_allow_list(monkeypatch, role, allowed, refused):
+    client = _client(monkeypatch, role)
+    with client.websocket_connect(allowed) as ws:
+        assert ws.receive_text() == "ok"
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect(refused):
+            pass
+
+
+def test_worker_init_db_skips_migrations(tmp_path, monkeypatch):
+    # init_db swaps module globals; register them so monkeypatch restores them.
+    for name in ("engine", "SessionLocal", "_db_path"):
+        monkeypatch.setattr(db_session, name, getattr(db_session, name))
+    monkeypatch.setattr(config, "_data_dir", tmp_path)
+    monkeypatch.setenv("VOICEBOX_ROLE", "tts")
+
+    db_session.init_db()
+
+    with sqlite3.connect(config.get_db_path()) as conn:
+        assert conn.execute("select name from sqlite_master where type='table'").fetchall() == []
+
+
+def test_completed_clears_stale_error(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'test.db'}")
+    Base.metadata.create_all(bind=engine)
+    db = sessionmaker(bind=engine)()
+    db.add(VoiceProfile(id="p", name="P"))
+    db.add(Generation(id="g", profile_id="p", text="hi", status="failed", error="Server was shut down during generation"))
+    db.commit()
+
+    result = asyncio.run(update_generation_status("g", "completed", db, audio_path="a.wav", duration=1.0))
+
+    assert result.status == "completed"
+    assert result.error is None

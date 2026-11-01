@@ -8,7 +8,7 @@ import argparse
 import uvicorn
 
 from .app import app  # noqa: F401 -- re-export for uvicorn "backend.main:app"
-from . import config, database
+from . import config, database, roles
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="voicebox backend server")
@@ -30,8 +30,15 @@ if __name__ == "__main__":
         default=None,
         help="Data directory for database, profiles, and generated audio",
     )
+    parser.add_argument(
+        "--role",
+        choices=roles.ROLES,
+        default="all",
+        help="all: 1 process (default). main: owns state. tts/stt: inference workers",
+    )
     args = parser.parse_args()
 
+    roles.set_role(args.role)
     if args.data_dir:
         config.set_data_dir(args.data_dir)
 

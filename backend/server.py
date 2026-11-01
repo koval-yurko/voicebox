@@ -126,6 +126,7 @@ try:
     from backend import config
     logger.info("Importing backend.database...")
     from backend import database
+    from backend import roles
     logger.info("Importing backend.main (this may take a while due to torch/transformers)...")
     from backend.main import app
     logger.info("Backend imports successful")
@@ -294,6 +295,12 @@ if __name__ == "__main__":
             help="Data directory for database, profiles, and generated audio",
         )
         parser.add_argument(
+            "--role",
+            choices=roles.ROLES,
+            default="all",
+            help="all: 1 process (default). main: owns state. tts/stt: inference workers",
+        )
+        parser.add_argument(
             "--parent-pid",
             type=int,
             default=None,
@@ -319,7 +326,9 @@ if __name__ == "__main__":
             async def _on_startup():
                 _start_parent_watchdog(_parent_pid, _data_dir)
 
-        logger.info(f"Parsed arguments: host={args.host}, port={args.port}, data_dir={args.data_dir}")
+        logger.info(f"Parsed arguments: host={args.host}, port={args.port}, data_dir={args.data_dir}, role={args.role}")
+
+        roles.set_role(args.role)
 
         # Set data directory if provided
         if args.data_dir:
