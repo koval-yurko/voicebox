@@ -347,6 +347,11 @@ async def _run_startup(application: FastAPI) -> None:
 
     backend_type = get_backend_type()
     logger.info("Backend: %s", backend_type.upper())
+    if roles.is_worker() and backend_type == "mlx":
+        from .backends.base import apply_worker_mlx_cache_limit
+
+        limit_mb = apply_worker_mlx_cache_limit(roles.get_role())
+        logger.info("MLX cache limit: %s", f"{limit_mb} MB" if limit_mb is not None else "MLX default")
     logger.info("GPU: %s", _get_gpu_status())
 
     from .backends.base import check_cuda_compatibility

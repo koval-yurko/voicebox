@@ -244,6 +244,32 @@ def empty_mlx_cache() -> None:
     mx.clear_cache()
 
 
+# MLX buffer cache limit per worker role, in MB. Measured in step 6 of
+# docs-internal/research/mlx-multi-process.md: TTS 1.7B peak 24 GB -> 11 GB at the
+# same speed (512 MB is 18% slower); STT changes little. Role all and main keep MLX's default.
+WORKER_MLX_CACHE_LIMIT_MB = {"tts": 2048, "stt": 512}
+
+
+def worker_mlx_cache_limit_mb(role: str) -> Optional[int]:
+    """Cache limit for this role: VOICEBOX_MLX_CACHE_LIMIT_MB, else the measured default."""
+    if role not in WORKER_MLX_CACHE_LIMIT_MB:
+        return None
+    override = os.environ.get("VOICEBOX_MLX_CACHE_LIMIT_MB")
+    if override:
+        return int(override)
+    return WORKER_MLX_CACHE_LIMIT_MB.get(role)
+
+
+def apply_worker_mlx_cache_limit(role: str) -> Optional[int]:
+    """Set the MLX cache limit for a worker. Returns the limit in MB, or None."""
+    limit_mb = worker_mlx_cache_limit_mb(role)
+    if limit_mb is not None:
+        import mlx.core as mx
+
+        mx.set_cache_limit(limit_mb * 1024 * 1024)
+    return limit_mb
+
+
 def manual_seed(seed: int, device: str) -> None:
     """
     Set the random seed on both CPU and the active accelerator.

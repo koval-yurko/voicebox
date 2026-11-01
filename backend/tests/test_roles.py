@@ -95,3 +95,14 @@ def test_health_reports_role(monkeypatch, role):
 
     monkeypatch.setenv("VOICEBOX_ROLE", role)
     assert asyncio.run(health()).role == role
+
+
+@pytest.mark.parametrize("role, env, expected", [("tts", None, 2048), ("stt", None, 512), ("tts", "300", 300), ("all", "300", None), ("main", None, None)])
+def test_worker_mlx_cache_limit(monkeypatch, role, env, expected):
+    from backend.backends.base import worker_mlx_cache_limit_mb
+
+    if env is None:
+        monkeypatch.delenv("VOICEBOX_MLX_CACHE_LIMIT_MB", raising=False)
+    else:
+        monkeypatch.setenv("VOICEBOX_MLX_CACHE_LIMIT_MB", env)
+    assert worker_mlx_cache_limit_mb(role) == expected

@@ -162,7 +162,7 @@ User data impact (checked on a copy of the app data): 0 captures, no personality
 | Desktop app knows 1 URL (`app/src/stores/serverStore.ts`) | No change: the UI uses main only. |
 | `speak_monitor.rs:51` and `/watchdog/disable` (`main.rs:1635`) call the app port (`SERVER_PORT`) | No change: main keeps `SERVER_PORT` (17593). |
 | Watchdog: the `.keep-running` file is shared, and the first watchdog deletes it (`backend/server.py:226-233`) | Tauri stops all 3 processes itself. Workers get `--parent-pid` and do not use `.keep-running`. Check first that the watchdog starts at all: it uses `@app.on_event("startup")`, which FastAPI may ignore with `lifespan` (`backend/app.py:149-156`). |
-| TTS peak memory 21 GB | Workers set `mx.set_cache_limit` (value to measure). |
+| TTS peak memory 21 GB | Workers set `mx.set_cache_limit`: TTS 2048 MB, STT 512 MB (measured in step 6; TTS peak 24 GB to 11 GB). |
 | STT stalls behind TTS in `--role all` | Optional: hold `inference_lock` per TTS chunk, not per segment. Helps users with 1 process. |
 
 ## Tauri process manager
@@ -189,6 +189,24 @@ Today Tauri starts 1 server on 17593 (`tauri/src-tauri/src/main.rs:124`, spawn a
    Found and fixed 2 old watchdog bugs: (1) `@app.on_event("startup")` never fires with `lifespan`, so the `--parent-pid` watchdog never started; `server.py` now starts it before `uvicorn.run`. (2) `/watchdog/disable` set a global in a second copy of `backend.server` (the server runs as `__main__`), so the watchdog never saw it; the flag is now the env var `VOICEBOX_WATCHDOG_DISABLED`. Workers pass no data dir to the watchdog, so only main reads and deletes `.keep-running`. Live check: 3 servers with `--parent-pid` of a `sleep` process exit about 5 s after it is killed; after `/watchdog/disable` on 3 ports they stay up.
    Limits: a worker that crashes is not restarted until the next `start_server` (app start or restart); its exit is logged. A reused main has no recorded GPU exe, so its workers use the bundled sidecar (right on macOS). In dev mode the app does not start servers, so the process manager runs only in a built app; it was checked with `cargo check`, not in a built app.
 6. **Memory limits.** Measure and set `mx.set_cache_limit` per worker.
+   Done 2026-11-01. `apply_worker_mlx_cache_limit()` in `backend/backends/base.py` runs at worker startup on MLX (`_run_startup` in `app.py`) and logs `MLX cache limit: N MB`. Defaults: TTS 2048 MB, STT 512 MB (`WORKER_MLX_CACHE_LIMIT_MB`). `VOICEBOX_MLX_CACHE_LIMIT_MB` overrides both. Main and `--role all` keep the MLX default. Tests: `test_worker_mlx_cache_limit` in `backend/tests/test_roles.py`.
+   Measured on the dev Mac (48 GB), 1 worker per run, restarted for each value. TTS: Qwen3-TTS 1.7B bf16, the same 530-character text with seed 1 (26.5 s of audio), after a short warm-up render. STT: `/transcribe` of a 106 s WAV after a warm-up. "After" is `phys_footprint` after the request; "Peak" is `phys_footprint_peak` (includes model load).
+
+   | Worker | Cache limit | Time | After | Peak |
+   |---|---|---|---|---|
+   | TTS 1.7B | MLX default | 20.3 s | 16 GB | 24 GB |
+   | TTS 1.7B | 0 | 57.3 s | 5.1 GB | 9.8 GB |
+   | TTS 1.7B | 512 MB | 24.0 s | 5.3 GB | 10 GB |
+   | TTS 1.7B | 1024 MB | 21.0 s | 5.3 GB | 11 GB |
+   | TTS 1.7B | **2048 MB** | 19.9 s | 7.5 GB | 11 GB |
+   | TTS 1.7B | 4096 MB | 19.9 s | 10 GB | 13 GB |
+   | STT `qwen-asr-0.6B` | MLX default | 1.75 s | 2.1 GB | 4.3 GB |
+   | STT `qwen-asr-0.6B` | 0 | 1.84 s | 1.8 GB | 3.9 GB |
+   | STT `qwen-asr-0.6B` | **512 MB** | 1.73 s | 2.1 GB | 3.9 GB |
+   | STT `qwen-asr-1.7B` | MLX default | 1.22 s | 3.4 GB | 5.6 GB |
+   | STT `qwen-asr-1.7B` | 512 MB | 1.22 s | 3.4 GB | 5.3 GB |
+
+   Why these values: for TTS, 2048 MB is the smallest limit with no slowdown and halves the peak (24 GB to 11 GB). Smaller limits are slower (512 MB +18 %, 0 almost 3x). For STT the limit changes little; 512 MB cuts about 0.3 GB of peak at the same speed. With both workers and main, the voice stack now peaks at about 15 GB instead of about 28 GB, which leaves room for an external LLM on a 48 GB Mac. The steady footprint after a render stays at about model + cache limit, so the cache is not fully returned after a generation.
 7. **Verify.** Run `scripts/stt_tts_contention_test.py` and `integrations/livekit/scripts/e2e_session.py --stt-port 17495 --tts-port 17494`. Run a UI generation and a dictation through main.
 8. Optional: hold `inference_lock` per TTS chunk for `--role all`.
 
