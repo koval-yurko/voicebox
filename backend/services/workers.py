@@ -1,8 +1,9 @@
-"""HTTP client from main to the STT worker (``--role main --stt-url``)."""
+"""HTTP client from main to the STT and TTS workers (``--role main --stt-url/--tts-url``)."""
 
 from pathlib import Path
 
 import httpx
+import numpy as np
 
 from ..backends import ModelConfig
 
@@ -29,10 +30,10 @@ async def _post(url: str, path: str, **kwargs) -> httpx.Response:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             response = await client.post(url + path, **kwargs)
     except httpx.HTTPError as e:
-        raise WorkerError(f"STT worker at {url} is not reachable: {e}") from e
+        raise WorkerError(f"Worker at {url} is not reachable: {e}") from e
     # 202 means the worker started a model download, so there is no transcript yet.
     if response.status_code != 200:
-        raise WorkerError(f"STT worker {path} failed ({response.status_code}): {_detail(response)}")
+        raise WorkerError(f"Worker {url}{path} failed ({response.status_code}): {_detail(response)}")
     return response
 
 
@@ -43,6 +44,12 @@ async def transcribe(url: str, config: ModelConfig, audio_path: str, language: s
     with open(audio_path, "rb") as f:
         response = await _post(url, "/transcribe", data=data, files={"file": (Path(audio_path).name, f)})
     return response.json()["text"]
+
+
+async def render_tts(url: str, params: dict) -> tuple[np.ndarray, int]:
+    """Run ``synthesize()`` on the TTS worker. Cancelling this closes the request, so the worker stops."""
+    response = await _post(url, "/tts/render", json=params)
+    return np.frombuffer(response.content, dtype=np.float32).copy(), int(response.headers["x-sample-rate"])
 
 
 async def load_model(url: str, model_name: str) -> None:

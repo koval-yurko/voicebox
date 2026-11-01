@@ -36,6 +36,12 @@ def stt_url() -> str | None:
     return url.rstrip("/") if url and get_role() == "main" else None
 
 
+def tts_url() -> str | None:
+    """TTS worker URL when this process is main and one was given, else None (render locally)."""
+    url = os.environ.get("VOICEBOX_TTS_URL")
+    return url.rstrip("/") if url and get_role() == "main" else None
+
+
 def is_worker() -> bool:
     return get_role() in _WORKER_PATHS
 
