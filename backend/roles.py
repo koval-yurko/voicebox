@@ -30,6 +30,12 @@ def get_role() -> str:
     return os.environ.get("VOICEBOX_ROLE", "all")
 
 
+def stt_url() -> str | None:
+    """STT worker URL when this process is main and one was given, else None (transcribe locally)."""
+    url = os.environ.get("VOICEBOX_STT_URL")
+    return url.rstrip("/") if url and get_role() == "main" else None
+
+
 def is_worker() -> bool:
     return get_role() in _WORKER_PATHS
 

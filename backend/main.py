@@ -5,6 +5,7 @@ entry point for development.
 """
 
 import argparse
+import os
 import uvicorn
 
 from .app import app  # noqa: F401 -- re-export for uvicorn "backend.main:app"
@@ -31,6 +32,11 @@ if __name__ == "__main__":
         help="Data directory for database, profiles, and generated audio",
     )
     parser.add_argument(
+        "--stt-url",
+        default=None,
+        help="With --role main: send batch transcription to this STT worker (e.g. http://127.0.0.1:17495)",
+    )
+    parser.add_argument(
         "--role",
         choices=roles.ROLES,
         default="all",
@@ -38,7 +44,11 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    if args.stt_url and args.role != "main":
+        parser.error("--stt-url needs --role main")
     roles.set_role(args.role)
+    if args.stt_url:
+        os.environ["VOICEBOX_STT_URL"] = args.stt_url
     if args.data_dir:
         config.set_data_dir(args.data_dir)
 

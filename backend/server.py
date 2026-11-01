@@ -295,6 +295,11 @@ if __name__ == "__main__":
             help="Data directory for database, profiles, and generated audio",
         )
         parser.add_argument(
+            "--stt-url",
+            default=None,
+            help="With --role main: send batch transcription to this STT worker (e.g. http://127.0.0.1:17495)",
+        )
+        parser.add_argument(
             "--role",
             choices=roles.ROLES,
             default="all",
@@ -328,7 +333,11 @@ if __name__ == "__main__":
 
         logger.info(f"Parsed arguments: host={args.host}, port={args.port}, data_dir={args.data_dir}, role={args.role}")
 
+        if args.stt_url and args.role != "main":
+            parser.error("--stt-url needs --role main")
         roles.set_role(args.role)
+        if args.stt_url:
+            os.environ["VOICEBOX_STT_URL"] = args.stt_url
 
         # Set data directory if provided
         if args.data_dir:

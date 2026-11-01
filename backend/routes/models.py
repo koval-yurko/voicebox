@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from .. import models
+from .. import models, roles
+from ..backends import STT_ENGINES
 from ..utils.platform_detect import get_backend_type
 from ..services.task_queue import create_background_task
 from ..utils.progress import get_progress_manager
@@ -64,6 +65,25 @@ def _resolve_model_config(model_name: str):
     return config
 
 
+async def _stt_worker_loaded() -> set[str] | None:
+    """STT models loaded in the STT worker, or None when main transcribes locally."""
+    if url := roles.stt_url():
+        from ..services import workers
+
+        return await workers.loaded_models(url) or set()
+    return None
+
+
+async def _unload(config) -> bool:
+    from ..backends import unload_model_by_config
+
+    if config.engine in STT_ENGINES and (url := roles.stt_url()):
+        from ..services import workers
+
+        return await workers.unload_model(url, config.model_name)
+    return unload_model_by_config(config)
+
+
 @router.post("/models/load")
 async def load_model(
     request: models.ModelLoadRequest | None = None,
@@ -112,7 +132,6 @@ async def unload_model(request: models.ModelLoadRequest | None = None):
     ``model_name`` unloads the default Qwen TTS model, as it always has; a
     supplied-but-empty name is a bad request.
     """
-    from ..backends import unload_model_by_config
     from ..services import tts
 
     requested_name = request.model_name if request else None
@@ -120,7 +139,7 @@ async def unload_model(request: models.ModelLoadRequest | None = None):
     if requested_name is not None:
         config = _resolve_model_config(requested_name)
         try:
-            was_loaded = unload_model_by_config(config)
+            was_loaded = await _unload(config)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
         if not was_loaded:
@@ -137,14 +156,14 @@ async def unload_model(request: models.ModelLoadRequest | None = None):
 @router.post("/models/{model_name}/unload")
 async def unload_model_by_name(model_name: str):
     """Unload a specific model from memory without deleting it from disk."""
-    from ..backends import get_model_config, unload_model_by_config
+    from ..backends import get_model_config
 
     config = get_model_config(model_name)
     if not config:
         raise HTTPException(status_code=400, detail=f"Unknown model: {model_name}")
 
     try:
-        was_loaded = unload_model_by_config(config)
+        was_loaded = await _unload(config)
         if not was_loaded:
             return {"message": f"Model {model_name} is not loaded"}
         return {"message": f"Model {model_name} unloaded successfully"}
@@ -309,6 +328,7 @@ async def get_model_status():
     from ..backends.base import has_in_progress_download, is_model_cached
 
     registry_configs = get_all_model_configs()
+    worker_loaded = await _stt_worker_loaded()
     model_configs = [
         {
             "model_name": cfg.model_name,
@@ -316,7 +336,11 @@ async def get_model_status():
             "hf_repo_id": cfg.hf_repo_id,
             "aux_hf_repo_ids": cfg.aux_hf_repo_ids,
             "model_size": cfg.model_size,
-            "check_loaded": lambda c=cfg: check_model_loaded(c),
+            "check_loaded": (
+                (lambda c=cfg: c.model_name in worker_loaded)
+                if worker_loaded is not None and cfg.engine in STT_ENGINES
+                else (lambda c=cfg: check_model_loaded(c))
+            ),
         }
         for cfg in registry_configs
     ]
