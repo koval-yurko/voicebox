@@ -606,9 +606,7 @@ for name, mod in [("dac", types.ModuleType("dac")),
 
 ## Candidate Engines
 
-The [`docs/PROJECT_STATUS.md`](https://github.com/jamiepine/voicebox/blob/main/docs/PROJECT_STATUS.md) file is the canonical, living list of candidates under evaluation — including why some have been backlogged (e.g. VoxCPM, which is effectively CUDA-only upstream).
-
-At a glance, current top candidates:
+Candidates under evaluation (snapshot from upstream, 2026-04):
 
 | Model | Tier | Size | Cross-platform? | Key Features |
 |-------|------|------|-----------------|--------------|
@@ -621,8 +619,6 @@ At a glance, current top candidates:
 **Backlogged:**
 
 - **VoxCPM** (2B, Apache 2.0) — CUDA ≥12 required upstream; MPS broken in issues #232/#248; CPU path rejected by maintainers (#256). Keep watching for a PR that relaxes the device requirement.
-
-Update `PROJECT_STATUS.md` when you pick one up or mark one as shipped/backlogged.
 
 ## Implementation Checklist
 

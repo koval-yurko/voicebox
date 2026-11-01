@@ -37,11 +37,11 @@
 
 <p align="center">
   <a href="https://voicebox.sh">voicebox.sh</a> •
-  <a href="https://github.com/koval-yurko/voicebox/wiki">Docs</a> •
+  <a href="https://docs.voicebox.sh">Docs</a> •
   <a href="#download">Download</a> •
   <a href="#features">Features</a> •
   <a href="#api">API</a> •
-  <a href="https://github.com/koval-yurko/voicebox/wiki/Troubleshooting">Troubleshooting</a>
+  <a href="docs/content/docs/overview/troubleshooting.mdx">Troubleshooting</a>
 </p>
 
 <br/>
@@ -89,7 +89,7 @@ Voicebox is built and maintained with [Capy](https://capy.ai?utm_source=voicebox
 
 Voicebox is a **local-first AI voice studio** — a free and open-source alternative to **ElevenLabs** and **WisprFlow** in one app. Clone voices from a few seconds of audio, generate speech in 23 languages across 8 TTS engines, dictate into any text field with a global hotkey, and give any MCP-aware AI agent a voice of your choosing.
 
-The two cloud incumbents sit on opposite halves of the voice I/O loop — ElevenLabs on output, WisprFlow on input. Voicebox does both and runs the whole thing on your machine. Optional transcript refinement and per-profile personas use an LLM endpoint you choose (any OpenAI-compatible server, such as LM Studio, Ollama or `mlx_lm.server`).
+The two cloud incumbents sit on opposite halves of the voice I/O loop — ElevenLabs on output, WisprFlow on input. Voicebox does both, bridges them with a bundled local LLM for refinement and per-profile personas, and runs the whole thing on your machine.
 
 - **Complete privacy** — models, voice data, and captures never leave your machine
 - **8 TTS engines** — Qwen3-TTS, Qwen CustomVoice, Qwen VoiceDesign, LuxTTS, Chatterbox Multilingual, Chatterbox Turbo, HumeAI TADA, and Kokoro
@@ -101,7 +101,7 @@ The two cloud incumbents sit on opposite halves of the voice I/O loop — Eleven
 - **Stories editor** — multi-track timeline for conversations, podcasts, and narratives
 - **Voice input** — global dictation hotkey with push-to-talk and toggle modes, accessibility-verified auto-paste on macOS, in-app mic on every text field, Whisper-based STT
 - **Agent voice output** — one tool call (`voicebox_speak`) and any MCP-aware agent (Claude Code, Cursor, Cline) speaks to you in a voice you've cloned
-- **Voice personalities** — attach a free-form persona to any voice profile, then Compose or Rewrite through your LLM endpoint — agents can invoke the same modes over MCP
+- **Voice personalities** — attach a free-form persona to any voice profile, then Compose, Rewrite, or Respond via a bundled local LLM — agents can invoke the same modes over MCP
 - **API-first** — REST API plus a built-in MCP server for integrating voice I/O into your own apps and agents
 - **Native performance** — built with Tauri (Rust), not Electron
 - **Runs everywhere** — macOS (MLX/Metal), Windows (CUDA), Linux, AMD ROCm, Intel Arc, Docker
@@ -121,7 +121,7 @@ The two cloud incumbents sit on opposite halves of the voice I/O loop — Eleven
 
 > **Linux** — Pre-built binaries are not yet available. See [voicebox.sh/linux-install](https://voicebox.sh/linux-install) for build-from-source instructions.
 
-> **Having trouble?** See the [Troubleshooting Guide](https://github.com/koval-yurko/voicebox/wiki/Troubleshooting) for common install, generation, model-download, and GPU issues.
+> **Having trouble?** See the [Troubleshooting Guide](docs/content/docs/overview/troubleshooting.mdx) for common install, generation, model-download, and GPU issues.
 
 ---
 
@@ -225,7 +225,7 @@ The other half of the voice I/O loop. Hold a hotkey anywhere on your system, spe
 - **Target-aware paste (macOS)** — accessibility-verified injection into the focused text field, with atomic clipboard save/restore so your clipboard isn't clobbered
 - **First-run permissions UX** — in-app gates walk you through the macOS Accessibility and Input Monitoring grants with deep-links to System Settings
 - **In-app mic button** on every Voicebox text field — generation form, profile descriptions, story titles, anywhere you'd type
-- **LLM refinement** — optional cleanup of ums, stutters, and false starts before paste. Needs an LLM endpoint in **Settings → Captures**; without one, dictation pastes the raw transcript
+- **LLM refinement** — optional cleanup of ums, stutters, and false starts before paste
 - **On-screen pill** — floating overlay surfacing `recording`, `transcribing`, `refining`, and `speaking` states. Same pill agents use when they speak to you, so there's one mental model for both directions of the loop
 
 ### Speech-to-Text
@@ -243,7 +243,7 @@ More engines (Parakeet v3, Qwen3-ASR) are planned — see [Roadmap](#roadmap).
 
 Every dictation, in-app recording, and uploaded audio file lands in the Captures tab — original audio paired with transcript, always preserved.
 
-- **Replay, re-transcribe, refine** — rerun STT with any Whisper size, or re-run the raw transcript through your LLM endpoint with different flags (filler cleanup, self-correction removal, technical-term preservation)
+- **Replay, re-transcribe, refine** — rerun STT with any Whisper size, or re-run the raw transcript through the local LLM with different flags (filler cleanup, self-correction removal, technical-term preservation)
 - **Edit inline** — tweak the transcript and save on blur
 - **Play as voice profile** — turn any capture into speech with a cloned voice, one click
 - **Promote to voice sample** — use a capture's audio + transcript as a reference sample on any voice profile
@@ -270,14 +270,14 @@ Also exposed as `POST /speak` for anything that doesn't speak MCP — ACP, A2A, 
 
 ### Voice Personalities
 
-Attach a free-form personality to any voice profile — who this voice is, how they speak, what they care about. Two actions appear on the generate box when a personality is set. Both need an LLM endpoint in **Settings → Captures**; without one they are disabled.
+Attach a free-form personality to any voice profile — who this voice is, how they speak, what they care about. Two actions appear on the generate box when a personality is set, powered by a bundled Qwen3 LLM running entirely locally.
 
 - **Compose** — a shuffle button that drops a fresh in-character line into the textarea; edit and speak, or click again for a different take
 - **Speak in character** — a toggle that routes your input text through the personality LLM to be rewritten in their voice before TTS
 
-Agents can reach the same rewrite path over MCP by passing `personality: true` to `voicebox_speak`, turning the tool into a text-in → personality-LLM → TTS pipeline. The same endpoint backs dictation's refinement step.
+Agents can reach the same rewrite path over MCP by passing `personality: true` to `voicebox_speak`, turning the tool into a text-in → personality-LLM → TTS pipeline. The same LLM backs dictation's refinement step — one LLM in the app, one model cache, one GPU-memory footprint.
 
-**LLM endpoint:** Voicebox has no built-in LLM. Point it at any OpenAI-compatible `/v1/chat/completions` server — LM Studio, Ollama, `mlx_lm.server`, llama.cpp, vLLM, or the OpenAI API. Run it on the same machine to keep everything local.
+**Local LLM options:** Qwen3 0.6B / 1.7B / 4B, sharing the TTS runtime (MLX on Apple Silicon, PyTorch elsewhere).
 
 Use cases: agent dev loops (dictate a question, hear the answer in a cloned voice), interactive characters for games and narrative tools, speech assistance for people who can't speak in their original voice.
 
@@ -368,7 +368,7 @@ claude mcp add voicebox \
 }
 ```
 
-Four tools ship: `voicebox_speak`, `voicebox_transcribe`, `voicebox_list_captures`, `voicebox_list_profiles`. Per-client voice bindings are managed in **Voicebox → Settings → MCP**. See the [full MCP guide](https://github.com/koval-yurko/voicebox/wiki/MCP-Server) for tool signatures, resolution precedence, the speaking-pill contract, and security notes.
+Four tools ship: `voicebox_speak`, `voicebox_transcribe`, `voicebox_list_captures`, `voicebox_list_profiles`. Per-client voice bindings are managed in **Voicebox → Settings → MCP**. See the [full MCP guide](docs/content/docs/overview/mcp-server.mdx) for tool signatures, resolution precedence, the speaking-pill contract, and security notes.
 
 ```ts
 // In any MCP-aware agent:
@@ -381,9 +381,7 @@ await voicebox_speak({
 
 **Use cases:** agent dev loops (voice in, voice out), game dialogue, podcast production, accessibility tools, voice assistants, content automation.
 
-Full API documentation available at `http://127.0.0.1:17593/docs` (see the [API Reference](https://github.com/koval-yurko/voicebox/wiki/API-Reference) wiki page).
-
-**Streaming and worker ports.** The desktop app runs speech generation and transcription in 2 worker processes by default: TTS on `http://127.0.0.1:17494` and STT on `http://127.0.0.1:17495` (Settings → General lists them with their routes). All the calls above go to the main server, which hands the work to the workers. The streaming routes run only on the workers: `WS /tts/ws`, `POST /tts/stream` and `POST /tts/render` on the TTS worker, and `WS /stt/ws` on the STT worker. The main server refuses them with an error that names the worker URL. The [LiveKit plugins](integrations/livekit) use the worker ports by default. With 1 process (`--role all`, or the setting off), every route is on the main server.
+Full API documentation available at `http://127.0.0.1:17493/docs`.
 
 ---
 
@@ -397,7 +395,7 @@ Full API documentation available at `http://127.0.0.1:17593/docs` (see the [API 
 | Backend       | FastAPI (Python)                                                                |
 | TTS Engines   | Qwen3-TTS, Qwen CustomVoice, Qwen VoiceDesign, LuxTTS, Chatterbox, Chatterbox Turbo, TADA, Kokoro |
 | STT           | Whisper / Whisper Turbo (PyTorch or MLX)                                        |
-| LLM           | None built in; optional OpenAI-compatible endpoint for refinement / personas    |
+| Local LLM     | Qwen3 (0.6B / 1.7B / 4B), shared runtime with TTS / STT                         |
 | MCP Server    | FastMCP mounted at `/mcp` (Streamable HTTP) + bundled stdio shim binary         |
 | Native Shim   | Rust (inside Tauri) for global hotkey, paste injection, focus introspection     |
 | Effects       | Pedalboard (Spotify)                                                            |
@@ -421,8 +419,6 @@ Full API documentation available at `http://127.0.0.1:17593/docs` (see the [API 
 | **Platform sinks**                 | Apple Notes, Obsidian, and other opt-in integrations                     |
 | **Plugin architecture**            | Extend with custom models, transforms, and sinks                         |
 | **Mobile companion**               | Control Voicebox from your phone                                         |
-
-For the **full engineering status, open-issue triage, and prioritized work queue**, see [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) — a living document that tracks what's shipped, what's in-flight, candidate TTS engines under evaluation, and why we've accepted or backlogged specific integrations.
 
 ---
 
@@ -455,7 +451,7 @@ just build-local    # (Windows) Build CPU + CUDA server binaries + Tauri app
 
 ### Adding New Voice Models
 
-The multi-engine architecture makes adding new TTS engines straightforward. A [step-by-step guide](https://github.com/koval-yurko/voicebox/wiki/Developer-TTS-Engines) covers the full process: dependency research, backend protocol implementation, frontend wiring, and PyInstaller bundling.
+The multi-engine architecture makes adding new TTS engines straightforward. A [step-by-step guide](docs-internal/tts-engines.mdx) covers the full process: dependency research, backend protocol implementation, frontend wiring, and PyInstaller bundling.
 
 The guide is optimized for AI coding agents. An [agent skill](.agents/skills/add-tts-engine/SKILL.md) can pick up a model name and handle the entire integration autonomously — you just test the build locally.
 
@@ -480,12 +476,6 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 2. Create a feature branch
 3. Make your changes
 4. Submit a PR
-
-## Security
-
-Found a security vulnerability? Please report it responsibly. See [SECURITY.md](SECURITY.md) for details.
-
----
 
 ## License
 

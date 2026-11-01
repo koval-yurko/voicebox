@@ -39,7 +39,6 @@ biome.json
 .npmrc
 Makefile
 CONTRIBUTING.md
-SECURITY.md
 LICENSE
 README.md
 backend/README.md
