@@ -2,6 +2,7 @@
 .git
 .github
 .gitignore
+docs/
 
 # Desktop-only (not needed in web container)
 tauri/

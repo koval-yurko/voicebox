@@ -95,7 +95,7 @@ To add a TTS engine, read [`docs-internal/tts-engines.mdx`](docs-internal/tts-en
 
 ## Documentation
 
-All documentation is in the [wiki](https://github.com/koval-yurko/voicebox/wiki).
+All documentation is in the [wiki](https://github.com/koval-yurko/voicebox/wiki). The page sources are in [`docs/`](docs/). Edit them there: a push to `main` publishes them to the wiki, and edits made in the wiki itself are overwritten.
 
 ## License
 

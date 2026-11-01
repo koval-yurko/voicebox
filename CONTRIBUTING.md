@@ -142,7 +142,7 @@ git checkout -b fix/your-bug-fix
 - Write clean, readable code
 - Follow existing code style
 - Add comments for complex logic
-- Update documentation as needed
+- Update documentation as needed: the wiki pages are the Markdown files in `docs/` (one file per page, `_Sidebar.md` for the menu). A push to `main` publishes them to the wiki, so do not edit pages in the wiki web editor
 
 ### 3. Test Your Changes
 
