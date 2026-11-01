@@ -18,6 +18,7 @@ import pytest
 from backend import models
 from backend.backends import (
     _OPENAI_COMPAT_CACHE_KEY,
+    LLMNotConfiguredError,
     _llm_backends,
     get_llm_backend,
     reset_backends,
@@ -176,7 +177,7 @@ async def test_empty_choices_raises_value_error():
             await backend.generate(prompt="x")
 
 
-def test_dispatch_switches_between_remote_and_builtin():
+def test_dispatch_switches_between_endpoints_and_off():
     set_llm_config("http://localhost:1/v1", "m", None)
     remote = get_llm_backend()
     assert isinstance(remote, OpenAICompatLLMBackend)
@@ -190,14 +191,17 @@ def test_dispatch_switches_between_remote_and_builtin():
 
     set_llm_config("", "", "")
     assert _OPENAI_COMPAT_CACHE_KEY not in _llm_backends
-    assert not isinstance(get_llm_backend(), OpenAICompatLLMBackend)
+    with pytest.raises(LLMNotConfiguredError):
+        get_llm_backend()
 
 
 def test_dispatch_requires_both_endpoint_and_model():
     set_llm_config("http://localhost:1/v1", None, None)
-    assert not isinstance(get_llm_backend(), OpenAICompatLLMBackend)
+    with pytest.raises(LLMNotConfiguredError):
+        get_llm_backend()
     set_llm_config(None, "m", None)
-    assert not isinstance(get_llm_backend(), OpenAICompatLLMBackend)
+    with pytest.raises(LLMNotConfiguredError):
+        get_llm_backend()
 
 
 def test_capture_settings_response_never_echoes_the_api_key():
@@ -230,11 +234,9 @@ def test_settings_write_syncs_dispatch_and_readiness(tmp_path):
         )
         assert isinstance(get_llm_backend(), OpenAICompatLLMBackend)
 
-        from backend.backends import get_llm_model_configs
         from backend.routes.captures import _llm_readiness
 
-        llm_cfg = next(c for c in get_llm_model_configs() if c.model_size == row.llm_model)
-        readiness = _llm_readiness(row, llm_cfg)
+        readiness = _llm_readiness(row)
         assert readiness.ready is True
         assert readiness.display_name == "m"
 
@@ -243,8 +245,9 @@ def test_settings_write_syncs_dispatch_and_readiness(tmp_path):
         assert isinstance(get_llm_backend(), OpenAICompatLLMBackend)
 
         row = settings_service.update_capture_settings(db, {"custom_llm_endpoint": None})
-        assert not isinstance(get_llm_backend(), OpenAICompatLLMBackend)
-        assert _llm_readiness(row, llm_cfg).display_name == llm_cfg.display_name
+        with pytest.raises(LLMNotConfiguredError):
+            get_llm_backend()
+        assert _llm_readiness(row).ready is False
     finally:
         db.close()
 
@@ -318,9 +321,13 @@ def test_routes_round_trip_through_fake_server(tmp_path):
     assert "unreachable" in res.text
 
     client.put("/settings/captures", json={"custom_llm_endpoint": None, "custom_llm_model": None})
-    assert not isinstance(get_llm_backend(), OpenAICompatLLMBackend)
+    with pytest.raises(LLMNotConfiguredError):
+        get_llm_backend()
     readiness = client.get("/capture/readiness").json()
-    assert readiness["llm"]["display_name"] != "remote-model"
+    assert readiness["llm"]["ready"] is False
+    res = client.post("/llm/generate", json={"prompt": "um hi"})
+    assert res.status_code == 400
+    assert "No LLM endpoint" in res.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -342,9 +349,7 @@ async def test_refinement_and_personality_record_remote_model_label():
 
     with FakeOpenAIServer(lambda *_: _chat_reply("Refined.")) as server:
         set_llm_config(server.base_url, "remote-model", None)
-        text, size = await refinement.refine_transcript(
-            "um hello", refinement.RefinementFlags(), model_size="0.6B"
-        )
+        text, size = await refinement.refine_transcript("um hello", refinement.RefinementFlags())
         assert (text, size) == ("Refined.", "remote-model")
-        result = await personality.rewrite_as_profile("A pirate.", "hello", model_size="0.6B")
+        result = await personality.rewrite_as_profile("A pirate.", "hello")
         assert result.model_size == "remote-model"

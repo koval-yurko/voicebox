@@ -106,8 +106,8 @@ import torch
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import __version__, config, database
-from .services import tts, transcribe, llm
+from . import __version__, config, database, roles
+from .services import tts, transcribe
 from .database import get_db
 from .utils.platform_detect import get_backend_type
 from .utils.progress import get_progress_manager
@@ -155,6 +155,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Added before CORS so CORS wraps it and a worker's 404 still has CORS headers.
+    application.add_middleware(roles.RoleMiddleware)
     _configure_cors(application)
     application.add_middleware(ClientIdMiddleware)
     # Added last so it runs first: external (tunnelled) requests are limited
@@ -265,27 +267,8 @@ def _get_gpu_status() -> str:
     return "None (CPU only)"
 
 
-async def _run_startup(application: FastAPI) -> None:
-    """Database init, warnings, model-cache prep. Runs on lifespan entry."""
-    import platform
-    import sys
-
-    logger.info("Voicebox v%s starting up", __version__)
-    logger.info(
-        "Python %s on %s %s (%s)",
-        sys.version.split()[0],
-        platform.system(),
-        platform.release(),
-        platform.machine(),
-    )
-
-    database.init_db()
-
-    from .database.session import _db_path
-
-    logger.info("Database: %s", _db_path)
-    logger.info("Data directory: %s", config.get_data_dir())
-
+def _run_main_startup() -> None:
+    """State-owning startup steps. Only main and all run them; workers own no state."""
     init_queue()
 
     # Mark stale "generating" records as failed -- leftovers from a killed process
@@ -330,8 +313,45 @@ async def _run_startup(application: FastAPI) -> None:
     finally:
         db.close()
 
+    from .services.cuda import check_and_update_cuda_binary
+    from .services.rocm import check_and_update_rocm_binary
+
+    create_background_task(check_and_update_cuda_binary())
+    create_background_task(check_and_update_rocm_binary())
+
+
+async def _run_startup(application: FastAPI) -> None:
+    """Database init, warnings, model-cache prep. Runs on lifespan entry."""
+    import platform
+    import sys
+
+    logger.info("Voicebox v%s starting up", __version__)
+    logger.info(
+        "Python %s on %s %s (%s)",
+        sys.version.split()[0],
+        platform.system(),
+        platform.release(),
+        platform.machine(),
+    )
+
+    database.init_db()
+
+    from .database.session import _db_path
+
+    logger.info("Role: %s", roles.get_role())
+    logger.info("Database: %s", _db_path)
+    logger.info("Data directory: %s", config.get_data_dir())
+
+    if not roles.is_worker():
+        _run_main_startup()
+
     backend_type = get_backend_type()
     logger.info("Backend: %s", backend_type.upper())
+    if roles.is_worker() and backend_type == "mlx":
+        from .backends.base import apply_worker_mlx_cache_limit
+
+        limit_mb = apply_worker_mlx_cache_limit(roles.get_role())
+        logger.info("MLX cache limit: %s", f"{limit_mb} MB" if limit_mb is not None else "MLX default")
     logger.info("GPU: %s", _get_gpu_status())
 
     from .backends.base import check_cuda_compatibility
@@ -339,12 +359,6 @@ async def _run_startup(application: FastAPI) -> None:
     _compatible, _cuda_warning = check_cuda_compatibility()
     if not _compatible:
         logger.warning("GPU COMPATIBILITY: %s", _cuda_warning)
-
-    from .services.cuda import check_and_update_cuda_binary
-    from .services.rocm import check_and_update_rocm_binary
-
-    create_background_task(check_and_update_cuda_binary())
-    create_background_task(check_and_update_rocm_binary())
 
     try:
         progress_manager = get_progress_manager()
@@ -375,10 +389,6 @@ async def _run_shutdown() -> None:
         transcribe.unload_whisper_model()
     except Exception:
         logger.exception("Failed to unload Whisper model")
-    try:
-        llm.unload_llm_model()
-    except Exception:
-        logger.exception("Failed to unload LLM model")
 
 
 app = create_app()

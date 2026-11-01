@@ -30,7 +30,7 @@
     "noTranscriptError": "このキャプチャにはまだ文字起こしがありません",
     "captureCardLabel": "キャプチャ · {{when}}",
     "header": {
-      "modelSummary": "{{stt}} · Qwen3 · {{llm}}"
+      "modelSummary": "{{stt}} · {{llm}}"
     },
     "source": {
       "dictation": "ディクテーション",
@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "整形済み",
       "raw": "生テキスト",
-      "refinedHint": "Qwen3 · {{model}} で整形",
+      "refinedHint": "{{model}} で整形",
       "rawHint": "{{model}} で文字起こし"
     },
     "actions": {
@@ -126,12 +126,6 @@
         "ready": "モデルをダウンロード済みです。",
         "missing": "音声を文字起こしするために必要です",
         "missingWithSize": "音声を文字起こしするために必要です · {{size}}"
-      },
-      "llm": {
-        "label": "{{name}}(整形)",
-        "ready": "モデルをダウンロード済みです。",
-        "missing": "貼り付け前に生の文字起こしを整形します",
-        "missingWithSize": "貼り付け前に生の文字起こしを整形します · {{size}}"
       },
       "inputMonitoring": {
         "label": "入力監視の権限",
@@ -280,8 +274,7 @@
       "defaultEffects": "デフォルトエフェクト",
       "defaultEffectsHint": "このボイスで新しく生成するすべてのものに自動適用されるエフェクトです。",
       "personalityLabel": "パーソナリティ",
-      "personalityPlaceholder": "例:「航海の比喩でしか話さない不機嫌な海賊」",
-      "personalityHint": "このボイスがどんな人物で、どのように話すか。生成ページの「Compose」ボタンとキャラクター書き換えトグルに反映されます。空欄にすると両方とも表示されません。"
+      "personalityPlaceholder": "例:「航海の比喩でしか話さない不機嫌な海賊」"
     },
     "avatar": {
       "alt": "アバタープレビュー"
@@ -977,22 +970,9 @@
       },
       "refinement": {
         "title": "整形",
-        "description": "ローカル LLM を任意で実行し、フィラー語、句読点、自己修正を文字起こしから整理します。",
         "auto": {
           "title": "文字起こしを自動で整形",
           "description": "キャプチャごとに実行されます。キャプチャタブで生テキストと整形済みを切り替えることもできます。"
-        },
-        "model": {
-          "title": "整形モデル",
-          "description": "大きなモデルは遅くなりますが、微妙な自己修正や専門用語をより適切に処理します。",
-          "size06": "Qwen3 · 0.6B · 400 MB · {{tail}}",
-          "size17": "Qwen3 · 1.7B · 1.1 GB · {{tail}}",
-          "size40": "Qwen3 · 4B · 2.5 GB · {{tail}}",
-          "tail": {
-            "veryFast": "超高速",
-            "fast": "高速",
-            "fullQuality": "高品質"
-          }
         },
         "smartCleanup": {
           "title": "スマートクリーンアップ",
@@ -1007,8 +987,6 @@
           "description": "コードの識別子、コマンド名、頭字語を発話どおりに保持します。コード入力欄にディクテーションするときに有効にしてください。"
         },
         "customEndpoint": {
-          "title": "カスタム LLM エンドポイント (上級)",
-          "description": "リファインとパーソナリティの書き換えを、任意の OpenAI 互換サーバー (llama.cpp、vLLM、LM Studio、LocalAI、Ollama の互換 API、OpenAI API 自体など) に委譲します。空欄のままなら内蔵の Qwen3 を使います。",
           "endpointLabel": "エンドポイント URL",
           "endpointPlaceholder": "http://localhost:8090/v1",
           "modelLabel": "モデル名",
@@ -1018,7 +996,6 @@
           "apiKeyPlaceholderReplace": "上書きする新しいキーを入力",
           "apiKeyConfigured": "保存済",
           "apiKeyClear": "クリア",
-          "statusBuiltin": "上で選んだ内蔵 Qwen3 モデルを使用しています",
           "statusRemote": "リファインとパーソナリティの書き換えを {{endpoint}} に送信しています"
         }
       },
@@ -1055,8 +1032,7 @@
         "aboutBody": "マシン上のどこからでもショートカットを押し続けて話すと、Voicebox があなたの声をテキストに変換します。クローンしたどのボイスでも再生でき、任意のアプリに貼り付けたり、コーディングエージェントに渡したりできます。",
         "differencesTitle": "ここが違います",
         "local": {
-          "title": "完全にローカル。",
-          "body": "Whisper と整形用 LLM はあなたのハードウェア上で動作します。クラウドもアカウントも不要で、声がマシンの外に出ることはありません。"
+          "title": "完全にローカル。"
         },
         "remote": {
           "title": "整形処理はリモート実行中。",
@@ -1205,8 +1181,7 @@
     "unknownSize": "サイズ不明",
     "sections": {
       "voiceGeneration": "音声生成",
-      "transcription": "文字起こし",
-      "languageModels": "言語モデル"
+      "transcription": "文字起こし"
     },
     "status": {
       "loaded": "読み込み済み"

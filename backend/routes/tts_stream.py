@@ -256,6 +256,49 @@ async def tts_stream(data: TTSStreamRequest, request: Request, db: Session = Dep
     )
 
 
+class TTSRenderRequest(BaseModel):
+    profile_id: str
+    text: str
+    language: str = "en"
+    engine: str
+    model_size: str
+    seed: Optional[int] = None
+    instruct: Optional[str] = None
+    max_chunk_chars: Optional[int] = None
+    crossfade_ms: Optional[int] = None
+
+
+@router.post("/tts/render")
+async def tts_render(data: TTSRenderRequest, request: Request, db: Session = Depends(get_db)):
+    """Render the whole text in this process; main's generation queue calls it on the TTS worker.
+
+    Returns float32 mono PCM (``application/octet-stream``) and ``X-Sample-Rate``.
+    Main keeps every step that writes state (status, normalize, effects, files, DB).
+    A client that leaves stops the render before its next chunk (499).
+    """
+    from ..services.generation import RenderStopped, synthesize
+
+    if not await _acquire_lock_unless_gone(request):
+        return Response(status_code=499)
+    gone = asyncio.ensure_future(request.receive())
+    try:
+        audio, sample_rate = await synthesize(**data.model_dump(), db=db, stopped=gone.done)
+    except RenderStopped:
+        logger.info("tts/render stopped: client left")
+        return Response(status_code=499)
+    except Exception as e:
+        logger.exception("tts/render failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    finally:
+        gone.cancel()
+        inference_lock.release()
+    return Response(
+        np.asarray(audio, dtype=np.float32).tobytes(),
+        media_type="application/octet-stream",
+        headers={"X-Sample-Rate": str(sample_rate)},
+    )
+
+
 @router.post("/tts/warmup")
 async def tts_warmup(data: TTSStreamOptions, db: Session = Depends(get_db)):
     """Load the model, build the voice prompt and run one short generation."""

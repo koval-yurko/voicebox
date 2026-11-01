@@ -162,7 +162,8 @@ export function CapturesTab() {
 
   const { settings: captureSettings, update: updateCaptureSettings } = useCaptureSettings();
   const sttModel = captureSettings?.stt_model ?? 'turbo';
-  const llmModel = captureSettings?.llm_model ?? '0.6B';
+  // Refine runs only on the custom LLM endpoint; there is no built-in LLM.
+  const llmModel = captureSettings?.custom_llm_endpoint ? captureSettings.custom_llm_model : null;
   const hotkeyEnabled = captureSettings?.hotkey_enabled ?? false;
   const pushToTalkKeys = captureSettings?.chord_push_to_talk_keys ?? [];
   const toggleToTalkKeys = captureSettings?.chord_toggle_to_talk_keys ?? [];
@@ -544,10 +545,12 @@ export function CapturesTab() {
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="w-1.5 h-1.5 rounded-full bg-accent" />
               <span>
-                {t('captures.header.modelSummary', {
-                  stt: getSttModelLabel(sttModel),
-                  llm: llmModel,
-                })}
+                {llmModel
+                  ? t('captures.header.modelSummary', {
+                      stt: getSttModelLabel(sttModel),
+                      llm: llmModel,
+                    })
+                  : getSttModelLabel(sttModel)}
               </span>
             </div>
             <div className="flex-1" />
@@ -672,7 +675,7 @@ export function CapturesTab() {
               <div className="flex-1" />
               <span className="text-xs text-muted-foreground">
                 {showRefined && selected.transcript_refined
-                  ? t('captures.transcript.refinedHint', { model: selected.llm_model ?? llmModel })
+                  ? t('captures.transcript.refinedHint', { model: selected.llm_model ?? '' })
                   : selected.stt_model
                     ? t('captures.transcript.rawHint', { model: getSttModelLabel(selected.stt_model) })
                     : null}
@@ -776,7 +779,8 @@ export function CapturesTab() {
                 variant="outline"
                 size="sm"
                 onClick={() => session.refine(selected.id)}
-                disabled={session.isRefining}
+                disabled={session.isRefining || !llmModel}
+                title={llmModel ? undefined : t('captures.actions.refineNeedsEndpoint')}
               >
                 {session.isRefining ? (
                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />

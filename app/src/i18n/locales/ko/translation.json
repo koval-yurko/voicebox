@@ -30,7 +30,7 @@
     "noTranscriptError": "아직 대본이 없는 캡처입니다",
     "captureCardLabel": "캡처 · {{when}}",
     "header": {
-      "modelSummary": "Whisper {{stt}} · Qwen3 · {{llm}}"
+      "modelSummary": "Whisper {{stt}} · {{llm}}"
     },
     "source": {
       "dictation": "받아쓰기",
@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "정제됨",
       "raw": "원본",
-      "refinedHint": "Qwen3 · {{model}}로 정제됨",
+      "refinedHint": "{{model}}로 정제됨",
       "rawHint": "Whisper {{model}}로 변환됨"
     },
     "actions": {
@@ -126,12 +126,6 @@
         "ready": "모델 다운로드 완료.",
         "missing": "오디오 변환에 필요합니다",
         "missingWithSize": "오디오 변환에 필요합니다 · {{size}}"
-      },
-      "llm": {
-        "label": "{{name}} (정제)",
-        "ready": "모델 다운로드 완료.",
-        "missing": "붙여넣기 전에 원시 대본을 정리합니다",
-        "missingWithSize": "붙여넣기 전에 원시 대본을 정리합니다 · {{size}}"
       },
       "inputMonitoring": {
         "label": "입력 모니터링 권한",
@@ -280,8 +274,7 @@
       "defaultEffects": "기본 효과",
       "defaultEffectsHint": "이 음성으로 새로 생성할 때 자동으로 적용되는 효과입니다.",
       "personalityLabel": "성격",
-      "personalityPlaceholder": "예: \"항상 해양 은유로 말하는 심술궂은 해적\"",
-      "personalityHint": "이 음성이 누구인지, 어떻게 말하는지를 정의합니다. 생성 페이지의 작성 버튼과 역할극 전환 토글을 제어합니다. 비워두면 둘 다 숨겨집니다."
+      "personalityPlaceholder": "예: \"항상 해양 은유로 말하는 심술궂은 해적\""
     },
     "avatar": {
       "alt": "아바타 미리보기"
@@ -973,22 +966,9 @@
       },
       "refinement": {
         "title": "정제",
-        "description": "로컬 LLM으로 대본의 불필요한 말, 구두점, 자기 수정을 정리합니다. (선택사항)",
         "auto": {
           "title": "대본 자동 정제",
           "description": "모든 캡처 후 실행됩니다. 캡처 탭에서 원본과 정제본 사이를 전환할 수 있습니다."
-        },
-        "model": {
-          "title": "정제 모델",
-          "description": "더 큰 모델은 느리지만 미묘한 자기 수정과 기술 용어를 더 잘 처리합니다.",
-          "size06": "Qwen3 · 0.6B · 400 MB · {{tail}}",
-          "size17": "Qwen3 · 1.7B · 1.1 GB · {{tail}}",
-          "size40": "Qwen3 · 4B · 2.5 GB · {{tail}}",
-          "tail": {
-            "veryFast": "매우 빠름",
-            "fast": "빠름",
-            "fullQuality": "최고 품질"
-          }
         },
         "smartCleanup": {
           "title": "스마트 정리",
@@ -1036,8 +1016,7 @@
         "aboutBody": "어디서든 단축키를 누르고 말하면 Voicebox가 음성을 텍스트로 변환합니다. 복제된 음성으로 재생하고, 앱에 붙여넣고, 코딩 에이전트로 보내세요.",
         "differencesTitle": "차이점",
         "local": {
-          "title": "완전 로컬.",
-          "body": "Whisper와 정제 LLM이 기기에서 실행됩니다. 클라우드 없음, 계정 없음, 음성이 기기를 떠나지 않습니다."
+          "title": "완전 로컬."
         },
         "playAs": {
           "title": "모든 음성으로 재생.",
@@ -1210,8 +1189,7 @@
     "unknownSize": "알 수 없는 크기",
     "sections": {
       "voiceGeneration": "음성 생성",
-      "transcription": "변환",
-      "languageModels": "언어 모델"
+      "transcription": "변환"
     },
     "status": {
       "loaded": "로드됨"

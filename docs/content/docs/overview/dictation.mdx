@@ -7,11 +7,12 @@ description: "Hold a key anywhere on your machine, speak, release — the transc
 
 Dictation lets you turn speech into clean text anywhere on your computer. Hold
 a chord, talk, release — Voicebox transcribes what you said with Whisper,
-optionally cleans it up with a local LLM, and pastes the result into the text
-field you had focused when you started.
+optionally cleans it up with your LLM endpoint, and pastes the result into the
+text field you had focused when you started.
 
-Everything happens on your hardware. No cloud, no accounts, no audio leaving
-the machine.
+Speech recognition runs on your hardware. No cloud, no accounts, no audio
+leaving the machine. The optional cleanup step sends only the transcript text
+to the LLM endpoint you set.
 
 <Callout type="info">
   Dictation was introduced in **0.5.0** alongside the Captures tab and the
@@ -117,8 +118,8 @@ were talking *from*, not where you're looking *now*" behavior.
 
 ## Refinement
 
-If auto-refine is on, a local LLM cleans up the raw Whisper transcript
-before it's pasted. The goal is to remove verbal clutter without rewriting
+If auto-refine is on and an LLM endpoint is set, the LLM cleans up the raw
+Whisper transcript before it's pasted. The goal is to remove verbal clutter without rewriting
 what you actually said.
 
 What refinement typically fixes:
@@ -140,18 +141,22 @@ What refinement deliberately preserves:
 - Your intent — refinement is cleanup, not rewriting
 
 Flags are snapshotted per capture, so you can re-refine the same raw
-transcript later with different flags without losing the original. The
-refinement model picker (**Settings → Captures → Refinement**) offers three
-bundled Qwen3 sizes:
+transcript later with different flags without losing the original.
 
-| Model | Size | Best for |
-|---|---|---|
-| Qwen3 0.6B | ~400 MB | Default. Very fast, good for casual dictation. |
-| Qwen3 1.7B | ~1.1 GB | Sweet spot when transcripts contain code identifiers. |
-| Qwen3 4B | ~2.5 GB | Full quality, slowest. |
+### LLM endpoint
 
-This is the same local LLM used by the per-profile personality modes — one
-LLM in the app, not two. See [Voice Personalities](/overview/voice-personalities).
+Voicebox has no built-in LLM. Refinement runs on any OpenAI-compatible
+`/v1/chat/completions` server — LM Studio, Ollama, `mlx_lm.server`,
+llama.cpp, vLLM, or the OpenAI API. Set the URL and model in
+**Settings → Captures → Refinement → LLM endpoint**. Run the server on the
+same machine to keep the transcript local.
+
+Without an endpoint, auto-refine is off and dictation pastes the raw
+transcript. Nothing fails, and the capture can be refined later once an
+endpoint is set.
+
+The same endpoint powers the per-profile personality modes. See
+[Voice Personalities](/overview/voice-personalities).
 
 ## Platform notes
 
@@ -200,7 +205,7 @@ A few cases where Voicebox deliberately does *not* synthesize a paste:
     The paired audio + transcript archive every dictation lands in.
   </Card>
   <Card title="Voice Personalities" href="/overview/voice-personalities">
-    The same local LLM powers per-profile compose and persona rewrite.
+    The same LLM endpoint powers per-profile compose and persona rewrite.
   </Card>
   <Card title="Transcription" href="/developer/transcription">
     Developer-level details on Whisper, Whisper Turbo, and the STT backend.

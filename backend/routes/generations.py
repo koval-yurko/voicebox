@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from .. import config, models
 from ..services import history, personality, profiles, tts
 from ..database import Generation as DBGeneration, VoiceProfile as DBVoiceProfile, get_db
-from ..services.generation import release_generation_memory, run_generation
+from ..services.generation import render_speech, run_generation
 from ..services.task_queue import cancel_generation as cancel_generation_job, enqueue_generation
 from ..utils.audio import load_audio
 from ..utils.tasks import get_task_manager
@@ -321,13 +321,7 @@ async def stream_speech(
     db: Session = Depends(get_db),
 ):
     """Generate speech and stream the WAV audio directly without saving to disk."""
-    from ..backends import (
-        engine_needs_trim,
-        engine_retries_runaway,
-        ensure_model_cached_or_raise,
-        get_tts_backend_for_engine,
-        load_engine_model,
-    )
+    from ..backends import ensure_model_cached_or_raise
 
     profile = await profiles.get_profile(data.profile_id, db)
     if not profile:
@@ -338,46 +332,22 @@ async def stream_speech(
         profiles.validate_profile_engine(profile, engine)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    tts_model = get_tts_backend_for_engine(engine)
     model_size = data.model_size or "1.7B"
 
     await ensure_model_cached_or_raise(engine, model_size)
-    await load_engine_model(engine, model_size)
 
-    voice_prompt = await profiles.create_voice_prompt_for_profile(
-        data.profile_id,
-        db,
+    audio, sample_rate = await render_speech(
+        db=db,
+        profile_id=data.profile_id,
+        text=data.text,
+        language=data.language,
         engine=engine,
+        model_size=model_size,
+        seed=data.seed,
+        instruct=data.instruct,
+        max_chunk_chars=data.max_chunk_chars,
+        crossfade_ms=data.crossfade_ms,
     )
-
-    from ..utils.chunked_tts import generate_chunked
-
-    trim_fn = None
-    runaway_detector = None
-    if engine_needs_trim(engine):
-        from ..utils.audio import trim_tts_output
-
-        trim_fn = trim_tts_output
-    if engine_retries_runaway(engine):
-        from ..utils.audio import has_tts_runaway
-
-        runaway_detector = has_tts_runaway
-
-    try:
-        audio, sample_rate = await generate_chunked(
-            tts_model,
-            data.text,
-            voice_prompt,
-            language=data.language,
-            seed=data.seed,
-            instruct=data.instruct,
-            max_chunk_chars=data.max_chunk_chars,
-            crossfade_ms=data.crossfade_ms,
-            trim_fn=trim_fn,
-            runaway_detector=runaway_detector,
-        )
-    finally:
-        release_generation_memory(tts_model)
 
     effects_chain_config = None
     if data.effects_chain is not None:

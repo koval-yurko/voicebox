@@ -183,18 +183,13 @@ def delete_capture(capture_id: str, db: Session) -> bool:
 async def refine_capture(
     capture_id: str,
     flags: RefinementFlags,
-    model_size: Optional[str],
     db: Session,
 ) -> Optional[CaptureResponse]:
     row = db.query(DBCapture).filter(DBCapture.id == capture_id).first()
     if not row:
         return None
 
-    refined, llm_size = await refine_transcript(
-        row.transcript_raw or "",
-        flags,
-        model_size=model_size,
-    )
+    refined, llm_size = await refine_transcript(row.transcript_raw or "", flags)
 
     row.transcript_refined = refined
     row.llm_model = llm_size

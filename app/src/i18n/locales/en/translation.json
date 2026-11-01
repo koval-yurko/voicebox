@@ -30,7 +30,7 @@
     "noTranscriptError": "Capture has no transcript yet",
     "captureCardLabel": "Capture · {{when}}",
     "header": {
-      "modelSummary": "{{stt}} · Qwen3 · {{llm}}"
+      "modelSummary": "{{stt}} · {{llm}}"
     },
     "source": {
       "dictation": "Dictation",
@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "Refined",
       "raw": "Raw",
-      "refinedHint": "Refined with Qwen3 · {{model}}",
+      "refinedHint": "Refined with {{model}}",
       "rawHint": "Transcribed with {{model}}"
     },
     "actions": {
@@ -63,7 +63,8 @@
       "playAsGenerating": "Generating…",
       "playAsStop": "Stop · {{name}}",
       "playAsStopFallback": "Stop · Voice",
-      "playAsDropdownLabel": "Play transcript as"
+      "playAsDropdownLabel": "Play transcript as",
+      "refineNeedsEndpoint": "Set an LLM endpoint in Settings > Captures to refine"
     },
     "empty": {
       "noMatches": "No captures match \"{{query}}\"",
@@ -126,12 +127,6 @@
         "ready": "Model downloaded.",
         "missing": "Needed to transcribe your audio",
         "missingWithSize": "Needed to transcribe your audio · {{size}}"
-      },
-      "llm": {
-        "label": "{{name}} (refinement)",
-        "ready": "Model downloaded.",
-        "missing": "Cleans up the raw transcript before paste",
-        "missingWithSize": "Cleans up the raw transcript before paste · {{size}}"
       },
       "inputMonitoring": {
         "label": "Input Monitoring permission",
@@ -281,7 +276,7 @@
       "defaultEffectsHint": "Effects applied automatically to all new generations with this voice.",
       "personalityLabel": "Personality",
       "personalityPlaceholder": "e.g. \"a grumpy pirate who only speaks in nautical metaphors\"",
-      "personalityHint": "Who this voice is and how they talk. Drives the Compose button and the in-character rewrite toggle on the generate page. Leave blank to hide both."
+      "personalityHint": "Who this voice is and how they talk. Drives the Compose button and the in-character rewrite toggle on the generate page. Both need an LLM endpoint in Settings > Captures. Leave blank to hide both."
     },
     "avatar": {
       "alt": "Avatar preview"
@@ -738,7 +733,8 @@
       "tooltipInactive": "Speak in character",
       "ariaLabelActive": "Speaking in character",
       "ariaLabelInactive": "Speak in character"
-    }
+    },
+    "needsLlmEndpoint": "Set an LLM endpoint in Settings > Captures"
   },
   "main": {
     "importVoice": "Import Voice",
@@ -803,6 +799,12 @@
         "runningDescription": "Server will continue running when app closes",
         "stoppedDescription": "Server will stop when app closes"
       },
+      "workerProcesses": {
+        "title": "Separate TTS and STT processes",
+        "description": "Run speech generation and transcription in their own server processes, so dictation does not wait for a long generation. Restart the app after changing.",
+        "updatedTitle": "Setting updated",
+        "restartDescription": "Restart the app to apply."
+      },
       "networkAccess": {
         "title": "Allow network access",
         "description": "Makes the server accessible from other devices on your network. Restart the app after changing.",
@@ -851,6 +853,19 @@
           "health": "Server status",
           "profiles": "List voices",
           "history": "Past generations"
+        },
+        "workers": {
+          "ttsTitle": "TTS worker",
+          "sttTitle": "STT worker",
+          "description": "Streaming runs in its own process at <code>{{url}}</code>. Connect streaming clients such as a LiveKit agent here; the main server does not serve these routes.",
+          "endpoints": {
+            "ttsWs": "Streaming speech (LiveKit)",
+            "ttsStream": "Streaming speech over HTTP",
+            "ttsRender": "Render a full clip",
+            "ttsWarmup": "Load the model ahead",
+            "sttWs": "Streaming transcription (LiveKit)",
+            "transcribe": "Transcribe a file"
+          }
         }
       }
     },
@@ -978,22 +993,10 @@
       },
       "refinement": {
         "title": "Refinement",
-        "description": "Optionally run a local LLM over transcripts to clean filler words, punctuation, and self-corrections.",
+        "description": "Optionally send transcripts to your LLM endpoint to clean filler words, punctuation, and self-corrections.",
         "auto": {
           "title": "Refine transcripts automatically",
           "description": "Runs after every capture. You can still toggle between raw and refined in the Captures tab."
-        },
-        "model": {
-          "title": "Refinement model",
-          "description": "Larger models are slower but handle subtle self-corrections and technical vocabulary better.",
-          "size06": "Qwen3 · 0.6B · 400 MB · {{tail}}",
-          "size17": "Qwen3 · 1.7B · 1.1 GB · {{tail}}",
-          "size40": "Qwen3 · 4B · 2.5 GB · {{tail}}",
-          "tail": {
-            "veryFast": "Very fast",
-            "fast": "Fast",
-            "fullQuality": "Full quality"
-          }
         },
         "smartCleanup": {
           "title": "Smart cleanup",
@@ -1008,8 +1011,8 @@
           "description": "Keep code identifiers, command names, and acronyms exactly as spoken. Turn on when you dictate into a code prompt."
         },
         "customEndpoint": {
-          "title": "Custom LLM endpoint (advanced)",
-          "description": "Delegate refinement and personality rewrites to any OpenAI-compatible server — llama.cpp, vLLM, LM Studio, LocalAI, Ollama's shim, or the OpenAI API itself. Leave blank to use the built-in Qwen3.",
+          "title": "LLM endpoint",
+          "description": "Refinement and personality rewrites run on any OpenAI-compatible server — LM Studio, Ollama's shim, mlx_lm.server, llama.cpp, vLLM, or the OpenAI API itself. There is no built-in LLM: leave this blank to turn them off.",
           "endpointLabel": "Endpoint URL",
           "endpointPlaceholder": "http://localhost:8090/v1",
           "modelLabel": "Model name",
@@ -1019,9 +1022,10 @@
           "apiKeyPlaceholderReplace": "Enter a new key to replace the stored one",
           "apiKeyConfigured": "Stored",
           "apiKeyClear": "Clear",
-          "statusBuiltin": "Using the built-in Qwen3 model selected above.",
-          "statusRemote": "Sending every refinement and personality rewrite to {{endpoint}}."
-        }
+          "statusRemote": "Sending every refinement and personality rewrite to {{endpoint}}.",
+          "statusOff": "No endpoint is set. Refinement and personality are off."
+        },
+        "needsEndpoint": "Set an LLM endpoint below to refine transcripts. Without one, dictation keeps the raw transcript."
       },
       "playback": {
         "title": "Playback",
@@ -1057,7 +1061,7 @@
         "differencesTitle": "What's different",
         "local": {
           "title": "Fully local.",
-          "body": "Whisper and the refinement LLM run on your hardware. No cloud, no accounts, your voice never leaves the machine."
+          "body": "Speech recognition runs on your hardware. No cloud, no accounts, your voice never leaves the machine."
         },
         "remote": {
           "title": "Refinement runs remotely.",
@@ -1235,8 +1239,7 @@
     "unknownSize": "Unknown size",
     "sections": {
       "voiceGeneration": "Voice Generation",
-      "transcription": "Transcription",
-      "languageModels": "Language Models"
+      "transcription": "Transcription"
     },
     "status": {
       "loaded": "Loaded"

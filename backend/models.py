@@ -249,7 +249,6 @@ class CaptureRefineRequest(BaseModel):
     """Request to refine a capture's transcript via the LLM."""
 
     flags: Optional[RefinementFlagsModel] = None
-    model_size: Optional[str] = Field(default=None, pattern="^(0\\.6B|1\\.7B|4B)$")
 
 
 class CaptureRetranscribeRequest(BaseModel):
@@ -266,7 +265,6 @@ class CaptureSettingsResponse(BaseModel):
     stt_model: str = Field(default="turbo")
     language: str = Field(default="auto")
     auto_refine: bool = True
-    llm_model: str = Field(default="0.6B", pattern="^(0\\.6B|1\\.7B|4B)$")
     smart_cleanup: bool = True
     self_correction: bool = True
     preserve_technical: bool = True
@@ -322,7 +320,6 @@ class CaptureSettingsUpdate(BaseModel):
     stt_model: Optional[STTModelName] = None
     language: Optional[str] = None
     auto_refine: Optional[bool] = None
-    llm_model: Optional[str] = Field(default=None, pattern="^(0\\.6B|1\\.7B|4B)$")
     smart_cleanup: Optional[bool] = None
     self_correction: Optional[bool] = None
     preserve_technical: Optional[bool] = None
@@ -422,7 +419,6 @@ class LLMGenerateRequest(BaseModel):
 
     prompt: str = Field(..., min_length=1, max_length=50000)
     system: Optional[str] = Field(None, max_length=4000)
-    model_size: Optional[str] = Field(default="0.6B", pattern="^(0\\.6B|1\\.7B|4B)$")
     max_tokens: int = Field(default=512, ge=1, le=4096)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     # Few-shot (user, assistant) pairs prepended as real chat turns.
@@ -496,6 +492,9 @@ class HealthResponse(BaseModel):
     supports_rocm: bool = False  # AMD GPU on Windows or Linux (/dev/kfd) — ROCm backend applicable
     gpu_compatibility_warning: Optional[str] = None  # Warning if GPU arch unsupported
     cloud_enabled: bool = False  # VOICEBOX_CLOUD_ENABLED — the app shows the Cloud section only when true
+    role: str = "all"  # --role; Tauri starts the workers when main reports "main"
+    tts_url: Optional[str] = None  # TTS worker URL when main has one (streaming clients call it directly)
+    stt_url: Optional[str] = None  # STT worker URL when main has one
 
 
 class DirectoryCheck(BaseModel):

@@ -3,6 +3,7 @@ Voice prompt caching utilities.
 """
 
 import hashlib
+import os
 import logging
 import torch
 from pathlib import Path
@@ -90,7 +91,11 @@ def cache_voice_prompt(
 
     # Store on disk (torch.save can handle both dicts and tensors)
     cache_file = _get_cache_dir() / f"{cache_key}.prompt"
-    torch.save(voice_prompt, cache_file)
+    # Temp file + rename: main and the TTS worker share this directory, and a
+    # reader must never load a half-written file (it would delete it as corrupt).
+    tmp_file = cache_file.with_name(f"{cache_file.name}.{os.getpid()}.tmp")
+    torch.save(voice_prompt, tmp_file)
+    os.replace(tmp_file, cache_file)
 
 
 def clear_voice_prompt_memory_cache() -> None:

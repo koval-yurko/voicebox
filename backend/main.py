@@ -5,10 +5,11 @@ entry point for development.
 """
 
 import argparse
+import os
 import uvicorn
 
 from .app import app  # noqa: F401 -- re-export for uvicorn "backend.main:app"
-from . import config, database
+from . import config, database, roles
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="voicebox backend server")
@@ -30,8 +31,31 @@ if __name__ == "__main__":
         default=None,
         help="Data directory for database, profiles, and generated audio",
     )
+    parser.add_argument(
+        "--stt-url",
+        default=None,
+        help="With --role main: send batch transcription to this STT worker (e.g. http://127.0.0.1:17495)",
+    )
+    parser.add_argument(
+        "--tts-url",
+        default=None,
+        help="With --role main: render generations on this TTS worker (e.g. http://127.0.0.1:17494)",
+    )
+    parser.add_argument(
+        "--role",
+        choices=roles.ROLES,
+        default="all",
+        help="all: 1 process (default). main: owns state. tts/stt: inference workers",
+    )
     args = parser.parse_args()
 
+    if (args.stt_url or args.tts_url) and args.role != "main":
+        parser.error("--stt-url and --tts-url need --role main")
+    roles.set_role(args.role)
+    if args.stt_url:
+        os.environ["VOICEBOX_STT_URL"] = args.stt_url
+    if args.tts_url:
+        os.environ["VOICEBOX_TTS_URL"] = args.tts_url
     if args.data_dir:
         config.set_data_dir(args.data_dir)
 

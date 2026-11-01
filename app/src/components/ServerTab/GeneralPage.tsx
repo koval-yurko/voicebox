@@ -36,6 +36,8 @@ export function GeneralPage() {
   const setKeepServerRunningOnClose = useServerStore((state) => state.setKeepServerRunningOnClose);
   const mode = useServerStore((state) => state.mode);
   const setMode = useServerStore((state) => state.setMode);
+  const workerProcesses = useServerStore((state) => state.workerProcesses);
+  const setWorkerProcesses = useServerStore((state) => state.setWorkerProcesses);
   const { toast } = useToast();
   const { data: health, isLoading, error: healthError } = useServerHealth();
 
@@ -174,6 +176,27 @@ export function GeneralPage() {
 
         {platform.metadata.isTauri && (
           <SettingRow
+            title={t('settings.general.workerProcesses.title')}
+            description={t('settings.general.workerProcesses.description')}
+            htmlFor="workerProcesses"
+            action={
+              <Toggle
+                id="workerProcesses"
+                checked={workerProcesses}
+                onCheckedChange={(checked: boolean) => {
+                  setWorkerProcesses(checked);
+                  toast({
+                    title: t('settings.general.workerProcesses.updatedTitle'),
+                    description: t('settings.general.workerProcesses.restartDescription'),
+                  });
+                }}
+              />
+            }
+          />
+        )}
+
+        {platform.metadata.isTauri && (
+          <SettingRow
             title={t('settings.general.networkAccess.title')}
             description={t('settings.general.networkAccess.description')}
             htmlFor="allowNetworkAccess"
@@ -211,6 +234,8 @@ export function GeneralPage() {
       {health?.cloud_enabled && <CloudSection />}
 
       <ApiReferenceCard serverUrl={serverUrl} />
+      {health?.tts_url && <WorkerApiCard worker="tts" url={health.tts_url} />}
+      {health?.stt_url && <WorkerApiCard worker="stt" url={health.stt_url} />}
 
       {platform.metadata.isTauri && <UpdatesSection />}
     </div>
@@ -379,9 +404,92 @@ function UpdatesSection() {
   );
 }
 
+type Endpoint = { method: 'GET' | 'POST' | 'WS'; path: string; label: string };
+
+function EndpointList({ endpoints }: { endpoints: Endpoint[] }) {
+  return (
+    <div className="space-y-1">
+      {endpoints.map((ep) => (
+        <div key={ep.path} className="flex items-center gap-2.5 py-1">
+          <span
+            className={`text-[10px] font-mono font-semibold w-9 text-center rounded px-1 py-px ${
+              ep.method === 'GET' ? 'bg-muted text-muted-foreground' : 'bg-accent/10 text-accent'
+            }`}
+          >
+            {ep.method}
+          </span>
+          <code className="text-xs font-mono text-muted-foreground">{ep.path}</code>
+          <span className="text-xs text-muted-foreground/50 ml-auto">{ep.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Streaming routes run only on the workers; main refuses them, so clients call these URLs.
+function WorkerApiCard({ worker, url }: { worker: 'tts' | 'stt'; url: string }) {
+  const { t } = useTranslation();
+  const endpoints: Endpoint[] =
+    worker === 'tts'
+      ? [
+          {
+            method: 'WS',
+            path: '/tts/ws',
+            label: t('settings.general.api.workers.endpoints.ttsWs'),
+          },
+          {
+            method: 'POST',
+            path: '/tts/stream',
+            label: t('settings.general.api.workers.endpoints.ttsStream'),
+          },
+          {
+            method: 'POST',
+            path: '/tts/render',
+            label: t('settings.general.api.workers.endpoints.ttsRender'),
+          },
+          {
+            method: 'POST',
+            path: '/tts/warmup',
+            label: t('settings.general.api.workers.endpoints.ttsWarmup'),
+          },
+          { method: 'GET', path: '/health', label: t('settings.general.api.endpoints.health') },
+        ]
+      : [
+          {
+            method: 'WS',
+            path: '/stt/ws',
+            label: t('settings.general.api.workers.endpoints.sttWs'),
+          },
+          {
+            method: 'POST',
+            path: '/transcribe',
+            label: t('settings.general.api.workers.endpoints.transcribe'),
+          },
+          { method: 'GET', path: '/health', label: t('settings.general.api.endpoints.health') },
+        ];
+
+  return (
+    <div className="rounded-lg border border-border/60 p-4 space-y-3">
+      <div>
+        <h3 className="text-sm font-medium">{t(`settings.general.api.workers.${worker}Title`)}</h3>
+        <p className="text-sm text-muted-foreground">
+          <Trans
+            i18nKey="settings.general.api.workers.description"
+            values={{ url }}
+            components={{
+              code: <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono" />,
+            }}
+          />
+        </p>
+      </div>
+      <EndpointList endpoints={endpoints} />
+    </div>
+  );
+}
+
 function ApiReferenceCard({ serverUrl }: { serverUrl: string }) {
   const { t } = useTranslation();
-  const endpoints = [
+  const endpoints: Endpoint[] = [
     { method: 'POST', path: '/generate', label: t('settings.general.api.endpoints.generate') },
     { method: 'GET', path: '/health', label: t('settings.general.api.endpoints.health') },
     { method: 'GET', path: '/profiles', label: t('settings.general.api.endpoints.profiles') },
@@ -402,21 +510,7 @@ function ApiReferenceCard({ serverUrl }: { serverUrl: string }) {
           />
         </p>
       </div>
-      <div className="space-y-1">
-        {endpoints.map((ep) => (
-          <div key={ep.path} className="flex items-center gap-2.5 py-1">
-            <span
-              className={`text-[10px] font-mono font-semibold w-9 text-center rounded px-1 py-px ${
-                ep.method === 'POST' ? 'bg-accent/10 text-accent' : 'bg-muted text-muted-foreground'
-              }`}
-            >
-              {ep.method}
-            </span>
-            <code className="text-xs font-mono text-muted-foreground">{ep.path}</code>
-            <span className="text-xs text-muted-foreground/50 ml-auto">{ep.label}</span>
-          </div>
-        ))}
-      </div>
+      <EndpointList endpoints={endpoints} />
       <p className="text-xs text-muted-foreground">
         <a
           href={`${serverUrl}/docs`}

@@ -3,12 +3,11 @@ import { useAccessibilityPermission } from '@/components/AccessibilityGate/Acces
 import { useInputMonitoringPermission } from '@/components/InputMonitoringGate/InputMonitoringGate';
 import { apiClient } from '@/lib/api/client';
 import type { ModelReadiness } from '@/lib/api/types';
-import { useCaptureSettings } from '@/lib/hooks/useSettings';
 import { usePlatform } from '@/platform/PlatformContext';
 
 const READINESS_POLL_INTERVAL_MS = 5_000;
 
-export type ReadinessGate = 'stt' | 'llm' | 'input_monitoring' | 'accessibility';
+export type ReadinessGate = 'stt' | 'input_monitoring' | 'accessibility';
 
 export interface DictationReadiness {
   isLoading: boolean;
@@ -17,9 +16,6 @@ export interface DictationReadiness {
   /** Subset of gates that are NOT yet satisfied — what the checklist renders. */
   missing: ReadinessGate[];
   stt: ModelReadiness | undefined;
-  llm: ModelReadiness | undefined;
-  /** Whether the user has auto-refine (LLM polish) enabled. */
-  autoRefine: boolean;
   inputMonitoring: boolean;
   accessibility: boolean;
   refetch: () => void;
@@ -37,7 +33,7 @@ export interface DictationReadiness {
  * synthetic paste — dictation still records and lands in Captures without it.
  *
  * Gates:
- *  - stt / llm: backend ``/capture/readiness`` (polled, since downloads
+ *  - stt: backend ``/capture/readiness`` (polled, since downloads
  *    finish out-of-band — e.g. user kicks off a download in another tab and
  *    expects the toggle to auto-unlock when it lands)
  *  - input_monitoring / accessibility: macOS TCC checks via Tauri commands
@@ -49,8 +45,6 @@ export interface DictationReadiness {
 export function useDictationReadiness(): DictationReadiness {
   const platform = usePlatform();
   const isTauri = platform.metadata.isTauri;
-  const { settings } = useCaptureSettings();
-  const autoRefine = settings?.auto_refine ?? true;
 
   const {
     needsPermission: inputMonNeeds,
@@ -66,20 +60,13 @@ export function useDictationReadiness(): DictationReadiness {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['capture-readiness'],
     queryFn: () => apiClient.getCaptureReadiness(),
-    // Poll only while a required model is still missing/downloading. Once
-    // all required models are green the endpoint's answer can't change
-    // until the user swaps models in settings, and that path invalidates
-    // the query explicitly from useSettings. refetchOnWindowFocus stays
-    // gated to the same condition.
-    refetchInterval: (query) => {
-      const d = query.state.data;
-      const allGreen = d && d.stt.ready && (!autoRefine || d.llm.ready);
-      return allGreen ? false : READINESS_POLL_INTERVAL_MS;
-    },
-    refetchOnWindowFocus: (query) => {
-      const d = query.state.data;
-      return !(d && d.stt.ready && (!autoRefine || d.llm.ready));
-    },
+    // Poll only while the STT model is still missing/downloading. Once it
+    // is green the endpoint's answer can't change until the user swaps
+    // models in settings, and that path invalidates the query explicitly
+    // from useSettings. refetchOnWindowFocus stays gated the same way.
+    // The LLM is not a gate: without an endpoint the raw transcript is kept.
+    refetchInterval: (query) => (query.state.data?.stt.ready ? false : READINESS_POLL_INTERVAL_MS),
+    refetchOnWindowFocus: (query) => !query.state.data?.stt.ready,
   });
 
   // On the web build there's no TCC layer — treat both as granted so the
@@ -87,14 +74,12 @@ export function useDictationReadiness(): DictationReadiness {
   const inputMonitoring = isTauri ? !inputMonNeeds : true;
   const accessibility = isTauri ? !a11yNeeds : true;
   const sttReady = data?.stt.ready ?? false;
-  const llmReady = data?.llm.ready ?? false;
 
   const missing: ReadinessGate[] = [];
   if (!sttReady) missing.push('stt');
-  if (autoRefine && !llmReady) missing.push('llm');
   if (!inputMonitoring) missing.push('input_monitoring');
   if (!accessibility) missing.push('accessibility');
-  const canRecord = sttReady && (!autoRefine || llmReady) && inputMonitoring;
+  const canRecord = sttReady && inputMonitoring;
 
   return {
     isLoading,
@@ -102,8 +87,6 @@ export function useDictationReadiness(): DictationReadiness {
     allReady: missing.length === 0,
     missing,
     stt: data?.stt,
-    llm: data?.llm,
-    autoRefine,
     inputMonitoring,
     accessibility,
     refetch: () => {

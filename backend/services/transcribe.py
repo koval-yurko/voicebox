@@ -2,6 +2,7 @@
 STT (Speech-to-Text) module - delegates to backend abstraction layer.
 """
 
+from .. import roles
 from ..backends import (
     ModelConfig,
     STTBackend,
@@ -47,6 +48,12 @@ def is_stt_model_ready(backend: STTBackend, config: ModelConfig) -> bool:
 
 async def load_stt_model(config: ModelConfig) -> None:
     """Load (and download if needed) an STT model, unloading other engines first."""
+    if url := roles.stt_url():
+        from . import workers
+
+        # shortcut: the worker downloads, so main shows no byte progress for STT downloads; move the download to main if that matters.
+        await workers.load_model(url, config.model_name)
+        return
     unload_other_stt_engines(config.engine)
     await get_stt_backend(config.engine).load_model(config.model_size)
 
@@ -55,6 +62,10 @@ async def transcribe_with_model(
     config: ModelConfig, audio_path: str, language: str | None = None
 ) -> str:
     """Transcribe with the given STT model. Only 1 STT engine stays loaded."""
+    if url := roles.stt_url():
+        from . import workers
+
+        return await workers.transcribe(url, config, audio_path, language)
     unload_other_stt_engines(config.engine)
     backend = get_stt_backend(config.engine)
     return await backend.transcribe(audio_path, language, config.model_size)

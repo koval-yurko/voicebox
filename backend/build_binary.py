@@ -510,8 +510,6 @@ def build_server(cuda=False, rocm=False):
                 "--hidden-import",
                 "mlx_lm",
                 "--hidden-import",
-                "backend.backends.qwen_llm_backend",
-                "--hidden-import",
                 "backend.backends.chatterbox_mlx_backend",
                 "--collect-submodules",
                 "mlx",

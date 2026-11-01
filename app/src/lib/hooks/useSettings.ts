@@ -44,13 +44,12 @@ export function useCaptureSettings() {
     },
     onSettled: (data, _err, patch) => {
       if (data) queryClient.setQueryData(CAPTURE_SETTINGS_KEY, data);
-      // /capture/readiness resolves stt_model / llm_model live on each
+      // /capture/readiness resolves stt_model and the LLM endpoint live on each
       // call, but its cached response keeps serving the previous
       // model's state until the next 5 s poll. Invalidate on model
       // swaps so the readiness checklist re-checks immediately.
       if (
         patch.stt_model !== undefined ||
-        patch.llm_model !== undefined ||
         patch.auto_refine !== undefined ||
         patch.custom_llm_endpoint !== undefined ||
         patch.custom_llm_model !== undefined

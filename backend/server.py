@@ -126,6 +126,7 @@ try:
     from backend import config
     logger.info("Importing backend.database...")
     from backend import database
+    from backend import roles
     logger.info("Importing backend.main (this may take a while due to torch/transformers)...")
     from backend.main import app
     logger.info("Backend imports successful")
@@ -133,13 +134,15 @@ except Exception as e:
     logger.error(f"Failed to import required modules: {e}", exc_info=True)
     sys.exit(1)
 
-_watchdog_disabled = False
+def _watchdog_disabled():
+    return os.environ.get("VOICEBOX_WATCHDOG_DISABLED") == "1"
 
 
 def disable_watchdog():
     """Disable the parent watchdog so the server keeps running after parent exits."""
-    global _watchdog_disabled
-    _watchdog_disabled = True
+    # Env var, not a module global: this file runs as __main__, so the
+    # /watchdog/disable route imports a second copy of it.
+    os.environ["VOICEBOX_WATCHDOG_DISABLED"] = "1"
     # Ignore SIGHUP so the server survives when the parent Tauri process exits.
     # On Unix, child processes receive SIGHUP when the parent's session leader
     # exits, which would kill the server even though we want it to persist.
@@ -232,7 +235,7 @@ def _start_parent_watchdog(parent_pid, data_dir=None):
                 except OSError as e:
                     watchdog_logger.warning(f"Failed to remove stale sentinel: {e}")
         while True:
-            if _watchdog_disabled:
+            if _watchdog_disabled():
                 watchdog_logger.info("Watchdog disabled (keep server running), stopping monitor")
                 return
             if not _is_pid_alive(parent_pid):
@@ -242,7 +245,7 @@ def _start_parent_watchdog(parent_pid, data_dir=None):
                 # mid-iteration (already past the _watchdog_disabled check above).
                 watchdog_logger.info(f"Parent process {parent_pid} gone, waiting for possible disable request...")
                 time.sleep(1)
-                if _watchdog_disabled:
+                if _watchdog_disabled():
                     watchdog_logger.info("Watchdog was disabled during grace period, keeping server alive")
                     return
                 # Check for sentinel file written by Tauri before exit.
@@ -294,6 +297,22 @@ if __name__ == "__main__":
             help="Data directory for database, profiles, and generated audio",
         )
         parser.add_argument(
+            "--stt-url",
+            default=None,
+            help="With --role main: send batch transcription to this STT worker (e.g. http://127.0.0.1:17495)",
+        )
+        parser.add_argument(
+            "--tts-url",
+            default=None,
+            help="With --role main: render generations on this TTS worker (e.g. http://127.0.0.1:17494)",
+        )
+        parser.add_argument(
+            "--role",
+            choices=roles.ROLES,
+            default="all",
+            help="all: 1 process (default). main: owns state. tts/stt: inference workers",
+        )
+        parser.add_argument(
             "--parent-pid",
             type=int,
             default=None,
@@ -311,15 +330,21 @@ if __name__ == "__main__":
 
         logger.info(f"Backend variant: {os.environ.get('VOICEBOX_BACKEND_VARIANT', 'cpu').upper()}")
 
-        # Register parent watchdog to start after server is fully ready
-        if args.parent_pid is not None:
-            _parent_pid = args.parent_pid
-            _data_dir = args.data_dir
-            @app.on_event("startup")
-            async def _on_startup():
-                _start_parent_watchdog(_parent_pid, _data_dir)
+        logger.info(f"Parsed arguments: host={args.host}, port={args.port}, data_dir={args.data_dir}, role={args.role}")
 
-        logger.info(f"Parsed arguments: host={args.host}, port={args.port}, data_dir={args.data_dir}")
+        if (args.stt_url or args.tts_url) and args.role != "main":
+            parser.error("--stt-url and --tts-url need --role main")
+        roles.set_role(args.role)
+        if args.stt_url:
+            os.environ["VOICEBOX_STT_URL"] = args.stt_url
+        if args.tts_url:
+            os.environ["VOICEBOX_TTS_URL"] = args.tts_url
+
+        # Start now: @app.on_event("startup") never fires because the app uses lifespan.
+        # Workers pass no data dir, so only main reads and deletes .keep-running;
+        # Tauri disables the worker watchdogs over HTTP.
+        if args.parent_pid is not None:
+            _start_parent_watchdog(args.parent_pid, None if roles.is_worker() else args.data_dir)
 
         # Set data directory if provided
         if args.data_dir:

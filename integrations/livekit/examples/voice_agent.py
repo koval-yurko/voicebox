@@ -5,8 +5,10 @@
     uv run python examples/voice_agent.py dev          # join rooms of LIVEKIT_URL
 
 Environment (all optional):
-    VOICEBOX_URL         Voicebox server for STT and TTS (default http://127.0.0.1:17593)
-    VOICEBOX_STT_URL     STT server, if it differs from VOICEBOX_URL
+    VOICEBOX_URL         Voicebox main server, for the profile list (default http://127.0.0.1:17593)
+    VOICEBOX_STT_URL     STT worker (default http://127.0.0.1:17495)
+    VOICEBOX_TTS_URL     TTS worker (default http://127.0.0.1:17494)
+                         With 1 Voicebox process (--role all), set both to VOICEBOX_URL.
     VOICEBOX_STT_MODEL   default qwen-asr-0.6B
     VOICEBOX_PROFILE_ID  TTS voice profile (default: the first profile of the server)
     OLLAMA_MODEL         answer with this local Ollama model; without it the agent
@@ -30,7 +32,8 @@ load_dotenv()
 logger = logging.getLogger("voicebox-agent")
 
 VOICEBOX_URL = os.getenv("VOICEBOX_URL", "http://127.0.0.1:17593")
-STT_URL = os.getenv("VOICEBOX_STT_URL", VOICEBOX_URL)
+STT_URL = os.getenv("VOICEBOX_STT_URL", "http://127.0.0.1:17495")
+TTS_URL = os.getenv("VOICEBOX_TTS_URL", "http://127.0.0.1:17494")
 STT_MODEL = os.getenv("VOICEBOX_STT_MODEL", "qwen-asr-0.6B")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
 
@@ -89,7 +92,7 @@ server.setup_fnc = prewarm
 async def entrypoint(ctx: JobContext) -> None:
     session = AgentSession(
         stt=VoiceboxSTT(model=STT_MODEL, base_url=STT_URL),
-        tts=VoiceboxTTS(profile_id=ctx.proc.userdata["profile_id"], base_url=VOICEBOX_URL),
+        tts=VoiceboxTTS(profile_id=ctx.proc.userdata["profile_id"], base_url=TTS_URL),
         vad=ctx.proc.userdata["vad"],
         llm=openai.LLM.with_ollama(model=OLLAMA_MODEL) if OLLAMA_MODEL else None,
     )

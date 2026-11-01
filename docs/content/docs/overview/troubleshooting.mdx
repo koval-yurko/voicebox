@@ -150,6 +150,45 @@ Please install flash-attn for faster inference.
 - Check your firewall settings
 - Ensure localhost is accessible
 
+### TTS or STT Worker Not Reachable
+
+By default the desktop app runs speech generation and transcription in 2 worker processes next to the main server: the TTS worker on port 17494 and the STT worker on port 17495. Settings → General shows both URLs.
+
+**Symptoms:**
+- A generation fails with `Worker at http://127.0.0.1:17494 is not reachable`
+- Dictation or transcription fails with `Worker at http://127.0.0.1:17495 is not reachable`
+- A streaming client (for example a LiveKit agent) gets HTTP 404 or a WebSocket close with code 1008 and the message `... runs on the worker at ..., not on main`
+
+**Solutions:**
+
+<AccordionGroup>
+  <Accordion title="Worker Port Already in Use">
+    Check which process holds the worker ports:
+
+    ```bash
+    # macOS/Linux
+    lsof -i :17494 -i :17495
+
+    # Windows
+    powershell -Command "Get-NetTCPConnection -LocalPort 17494,17495 -State Listen"
+    ```
+
+    Stop the other process, then restart the app (or Settings → GPU → restart the server).
+  </Accordion>
+
+  <Accordion title="Worker Crashed">
+    Open Settings → Logs and look for lines that start with `[tts]` or `[stt]`. The app restarts a worker that exits on its own, at most 3 times in 60 seconds. After that it logs `not restarting it until the next server start`. Fix the cause shown in the log, then restart the app.
+  </Accordion>
+
+  <Accordion title="Streaming Client Connects to the Main Server">
+    The main server does not run `/tts/ws`, `/tts/stream`, `/tts/warmup`, `/tts/render` or `/stt/ws` when it has workers. Point the client at the worker URL from the error message or from Settings → General: `http://127.0.0.1:17494` for TTS, `http://127.0.0.1:17495` for STT.
+  </Accordion>
+
+  <Accordion title="Run Everything in 1 Process">
+    Turn off Settings → General → *Separate TTS and STT processes* and restart the app. The server then runs TTS and STT itself, as before, and all routes are on the main server URL.
+  </Accordion>
+</AccordionGroup>
+
 ## Generation Issues
 
 ### First Generation is Very Slow

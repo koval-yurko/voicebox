@@ -18,6 +18,12 @@ Remote Mode allows you to run the Voicebox backend on a separate machine (like a
 
 In Remote Mode, the Voicebox desktop app (running on your local machine) communicates with the backend server (running on a remote machine) via HTTP. The local app provides only the user interface, while the remote server handles all the heavy processing including the TTS models, API endpoints, and audio generation.
 
+### Worker Processes
+
+A server that you start by hand, as in the steps below, runs in 1 process (`--role all`), so every route is on its port.
+
+The desktop app works differently by default: it runs the main server plus a TTS worker (port 17494) and an STT worker (port 17495). With **Allow network access** on, only the main server listens on the network; the workers listen on `127.0.0.1` only. Another device can still use everything through the main server, because main sends generation and transcription to the workers. The streaming routes (`/tts/ws`, `/tts/stream`, `/stt/ws`) run only on the workers, so a streaming client on another machine cannot reach them. For remote streaming, turn off Settings → General → *Separate TTS and STT processes* (the main server then serves the streaming routes itself), or start the workers by hand with `--host 0.0.0.0`.
+
 ## Setting Up Remote Mode
 
 ### On the Server

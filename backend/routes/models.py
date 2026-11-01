@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from .. import models
+from .. import models, roles
+from ..backends import STT_ENGINES
 from ..utils.platform_detect import get_backend_type
 from ..services.task_queue import create_background_task
 from ..utils.progress import get_progress_manager
@@ -64,6 +65,39 @@ def _resolve_model_config(model_name: str):
     return config
 
 
+def _worker_url(engine: str) -> str | None:
+    """The worker that owns this engine's models, or None when main runs it locally."""
+    return roles.stt_url() if engine in STT_ENGINES else roles.tts_url()
+
+
+async def _workers_loaded() -> dict[str, set[str]]:
+    """Loaded model names per worker URL; empty when main runs everything."""
+    from ..services import workers
+
+    urls = {url for url in (roles.stt_url(), roles.tts_url()) if url}
+    return {url: (await workers.loaded_models(url)) or set() for url in urls}
+
+
+def _load_func(config):
+    from ..backends import get_model_load_func
+
+    if url := _worker_url(config.engine):
+        from ..services import workers
+
+        return lambda: workers.load_model(url, config.model_name)
+    return get_model_load_func(config)
+
+
+async def _unload(config) -> bool:
+    from ..backends import unload_model_by_config
+
+    if url := _worker_url(config.engine):
+        from ..services import workers
+
+        return await workers.unload_model(url, config.model_name)
+    return unload_model_by_config(config)
+
+
 @router.post("/models/load")
 async def load_model(
     request: models.ModelLoadRequest | None = None,
@@ -78,7 +112,6 @@ async def load_model(
     request for the default — silently loading Qwen there is the very bug this
     endpoint had.
     """
-    from ..backends import get_model_load_func
     from ..services import tts
 
     requested_name = request.model_name if request else None
@@ -87,7 +120,7 @@ async def load_model(
     if requested_name is not None:
         config = _resolve_model_config(requested_name)
         try:
-            result = get_model_load_func(config)()
+            result = _load_func(config)()
             if asyncio.iscoroutine(result):
                 await result
         except Exception as e:
@@ -112,7 +145,6 @@ async def unload_model(request: models.ModelLoadRequest | None = None):
     ``model_name`` unloads the default Qwen TTS model, as it always has; a
     supplied-but-empty name is a bad request.
     """
-    from ..backends import unload_model_by_config
     from ..services import tts
 
     requested_name = request.model_name if request else None
@@ -120,7 +152,7 @@ async def unload_model(request: models.ModelLoadRequest | None = None):
     if requested_name is not None:
         config = _resolve_model_config(requested_name)
         try:
-            was_loaded = unload_model_by_config(config)
+            was_loaded = await _unload(config)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
         if not was_loaded:
@@ -137,14 +169,14 @@ async def unload_model(request: models.ModelLoadRequest | None = None):
 @router.post("/models/{model_name}/unload")
 async def unload_model_by_name(model_name: str):
     """Unload a specific model from memory without deleting it from disk."""
-    from ..backends import get_model_config, unload_model_by_config
+    from ..backends import get_model_config
 
     config = get_model_config(model_name)
     if not config:
         raise HTTPException(status_code=400, detail=f"Unknown model: {model_name}")
 
     try:
-        was_loaded = unload_model_by_config(config)
+        was_loaded = await _unload(config)
         if not was_loaded:
             return {"message": f"Model {model_name} is not loaded"}
         return {"message": f"Model {model_name} unloaded successfully"}
@@ -309,6 +341,7 @@ async def get_model_status():
     from ..backends.base import has_in_progress_download, is_model_cached
 
     registry_configs = get_all_model_configs()
+    worker_loaded = await _workers_loaded()
     model_configs = [
         {
             "model_name": cfg.model_name,
@@ -316,7 +349,11 @@ async def get_model_status():
             "hf_repo_id": cfg.hf_repo_id,
             "aux_hf_repo_ids": cfg.aux_hf_repo_ids,
             "model_size": cfg.model_size,
-            "check_loaded": lambda c=cfg: check_model_loaded(c),
+            "check_loaded": (
+                (lambda c=cfg: c.model_name in worker_loaded[_worker_url(c.engine)])
+                if _worker_url(cfg.engine) in worker_loaded
+                else (lambda c=cfg: check_model_loaded(c))
+            ),
         }
         for cfg in registry_configs
     ]
@@ -459,7 +496,7 @@ async def get_model_status():
 @router.post("/models/download")
 async def trigger_model_download(request: models.ModelDownloadRequest):
     """Trigger download of a specific model."""
-    from ..backends import get_model_config, get_model_load_func
+    from ..backends import get_model_config
 
     task_manager = get_task_manager()
     progress_manager = get_progress_manager()
@@ -468,7 +505,7 @@ async def trigger_model_download(request: models.ModelDownloadRequest):
     if not config:
         raise HTTPException(status_code=400, detail=f"Unknown model: {request.model_name}")
 
-    load_func = get_model_load_func(config)
+    load_func = _load_func(config)
 
     async def download_in_background():
         try:

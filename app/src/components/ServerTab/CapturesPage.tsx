@@ -32,7 +32,7 @@ import { usePlatform } from '@/platform/PlatformContext';
 import { useServerStore } from '@/stores/serverStore';
 import { cn } from '@/lib/utils/cn';
 import { defaultChordKeys, displayLabelForKey, modifierSideHint } from '@/lib/utils/keyCodes';
-import type { Qwen3ModelSize, STTModelName, VoiceProfileResponse } from '@/lib/api/types';
+import type { STTModelName, VoiceProfileResponse } from '@/lib/api/types';
 import { normalizeSttModel } from '@/lib/constants/sttModels';
 import { SettingRow, SettingSection } from './SettingRow';
 
@@ -133,7 +133,6 @@ export function CapturesPage() {
   const sttModel = normalizeSttModel(settings?.stt_model ?? 'turbo');
   const language = settings?.language ?? 'auto';
   const autoRefine = settings?.auto_refine ?? true;
-  const llmModel = settings?.llm_model ?? '0.6B';
   const smartCleanup = settings?.smart_cleanup ?? true;
   const selfCorrection = settings?.self_correction ?? true;
   const preserveTechnical = settings?.preserve_technical ?? true;
@@ -149,6 +148,8 @@ export function CapturesPage() {
   // React state below is a freshly-typed key that hasn't been sent yet.
   const customLlmApiKeyConfigured = Boolean(settings?.custom_llm_api_key_configured);
   const customLlmActive = Boolean(customLlmEndpointSaved && customLlmModelSaved);
+  // There is no built-in LLM: refinement needs the endpoint below.
+  const refineOn = autoRefine && customLlmActive;
 
   const [chordEditor, setChordEditor] = useState<'push' | 'toggle' | null>(null);
   const [opening, setOpening] = useState(false);
@@ -249,21 +250,12 @@ export function CapturesPage() {
                   // page — the user toggles on, presses the chord, and
                   // nothing happens because useChordSync gates on readiness.
                   if (!v) return;
-                  const missingModels = readiness.missing.filter(
-                    (g) => g === 'stt' || g === 'llm',
-                  );
-                  if (missingModels.length === 0) return;
-                  const names = [
-                    missingModels.includes('stt') ? readiness.stt?.display_name : null,
-                    missingModels.includes('llm') ? readiness.llm?.display_name : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' and ');
+                  if (!readiness.missing.includes('stt')) return;
                   toast({
                     title: t('captures.toast.shortcutNotArmed'),
                     description: t('captures.toast.shortcutNotArmedDescription', {
-                      names,
-                      count: missingModels.length,
+                      names: readiness.stt?.display_name,
+                      count: 1,
                     }),
                   });
                 }}
@@ -432,41 +424,19 @@ export function CapturesPage() {
       >
         <SettingRow
           title={t('settings.captures.refinement.auto.title')}
-          description={t('settings.captures.refinement.auto.description')}
+          description={
+            customLlmActive
+              ? t('settings.captures.refinement.auto.description')
+              : t('settings.captures.refinement.needsEndpoint')
+          }
           htmlFor="autoRefine"
           action={
             <Toggle
               id="autoRefine"
-              checked={autoRefine}
+              checked={refineOn}
               onCheckedChange={(v) => update({ auto_refine: v })}
+              disabled={!customLlmActive}
             />
-          }
-        />
-
-        <SettingRow
-          title={t('settings.captures.refinement.model.title')}
-          description={t('settings.captures.refinement.model.description')}
-          action={
-            <Select
-              value={llmModel}
-              onValueChange={(v) => update({ llm_model: v as Qwen3ModelSize })}
-              disabled={!autoRefine}
-            >
-              <SelectTrigger className="w-[260px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0.6B">
-                  {t('settings.captures.refinement.model.size06', { tail: t('settings.captures.refinement.model.tail.veryFast') })}
-                </SelectItem>
-                <SelectItem value="1.7B">
-                  {t('settings.captures.refinement.model.size17', { tail: t('settings.captures.refinement.model.tail.fast') })}
-                </SelectItem>
-                <SelectItem value="4B">
-                  {t('settings.captures.refinement.model.size40', { tail: t('settings.captures.refinement.model.tail.fullQuality') })}
-                </SelectItem>
-              </SelectContent>
-            </Select>
           }
         />
 
@@ -479,7 +449,7 @@ export function CapturesPage() {
               id="smartCleanup"
               checked={smartCleanup}
               onCheckedChange={(v) => update({ smart_cleanup: v })}
-              disabled={!autoRefine}
+              disabled={!refineOn}
             />
           }
         />
@@ -493,7 +463,7 @@ export function CapturesPage() {
               id="selfCorrection"
               checked={selfCorrection}
               onCheckedChange={(v) => update({ self_correction: v })}
-              disabled={!autoRefine}
+              disabled={!refineOn}
             />
           }
         />
@@ -507,7 +477,7 @@ export function CapturesPage() {
               id="preserveTechnical"
               checked={preserveTechnical}
               onCheckedChange={(v) => update({ preserve_technical: v })}
-              disabled={!autoRefine}
+              disabled={!refineOn}
             />
           }
         />
@@ -588,7 +558,7 @@ export function CapturesPage() {
                 ? t('settings.captures.refinement.customEndpoint.statusRemote', {
                     endpoint: customLlmEndpointSaved,
                   })
-                : t('settings.captures.refinement.customEndpoint.statusBuiltin')}
+                : t('settings.captures.refinement.customEndpoint.statusOff')}
             </p>
           </div>
         </SettingRow>

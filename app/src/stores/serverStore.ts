@@ -17,6 +17,9 @@ interface ServerStore {
 
   customModelsDir: string | null;
   setCustomModelsDir: (dir: string | null) => void;
+
+  workerProcesses: boolean;
+  setWorkerProcesses: (on: boolean) => void;
 }
 
 /**
@@ -84,6 +87,9 @@ export const useServerStore = create<ServerStore>()(
 
       customModelsDir: null,
       setCustomModelsDir: (dir) => set({ customModelsDir: dir }),
+
+      workerProcesses: true,
+      setWorkerProcesses: (on) => set({ workerProcesses: on }),
     }),
     {
       name: 'voicebox-server',

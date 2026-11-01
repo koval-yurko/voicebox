@@ -6,7 +6,7 @@ import uuid
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from .. import config
+from .. import config, roles
 from .models import (
     Base,
     AudioChannel,
@@ -55,6 +55,9 @@ def init_db() -> None:
         cursor.close()
 
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    if roles.is_worker():
+        return  # main owns migrations and seeds; 2 processes running them would race
 
     run_migrations(engine)
     Base.metadata.create_all(bind=engine)

@@ -11,14 +11,11 @@ Whisper-loop echoes, the model answering a question instead of
 rewriting it) but a human still has to read the final column.
 
 Usage:
-    # Backend server must be running.
+    # Backend server must be running, with an LLM endpoint set in Settings > Captures.
     python backend/tests/test_refinement_samples.py
 
     # Hit a non-default port (auto-detected via /health probe when omitted):
     python backend/tests/test_refinement_samples.py --port 17593
-
-    # Only test one model size:
-    python backend/tests/test_refinement_samples.py --model 4B
 
     # Dump JSON for diffing against a prior run:
     python backend/tests/test_refinement_samples.py --json results.json
@@ -345,7 +342,7 @@ def detect_backend_port(hint: Optional[int]) -> int:
 
 
 def refine_via_api(client: httpx.Client, port: int, system_prompt: str,
-                   raw: str, model_size: str) -> tuple[str, int]:
+                   raw: str) -> tuple[str, int]:
     """Mirror the real ``refine_transcript`` path: deterministic pre-process
     first, then LLM. We hit ``/llm/generate`` rather than the refinement
     endpoint because that one takes a capture_id — the pre-process call
@@ -358,7 +355,6 @@ def refine_via_api(client: httpx.Client, port: int, system_prompt: str,
         json={
             "prompt": cleaned,
             "system": system_prompt[:4000],
-            "model_size": model_size,
             "max_tokens": 2048,
             "temperature": 0.2,
             # Same few-shot pairs the refinement service uses — keeps the
@@ -408,13 +404,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--port", type=int, default=None,
                     help="Voicebox backend port (auto-detected if omitted)")
-    ap.add_argument("--model", choices=("0.6B", "1.7B", "4B"), action="append",
-                    help="Refinement model size(s) to test (repeat to run several)")
     ap.add_argument("--json", type=Path, default=None,
                     help="Also write results as JSON to this path")
     args = ap.parse_args()
 
-    models = tuple(args.model) if args.model else ("0.6B", "4B")
+    models = ("endpoint",)  # the custom endpoint picks the model
     port = detect_backend_port(args.port)
     print(f"backend → http://127.0.0.1:{port}")
     print(f"samples → {len(SAMPLES)}, models → {models}")
@@ -429,7 +423,7 @@ def main() -> int:
                 print(f"  [{i}/{len(SAMPLES)}] {sample.name} … ", end="", flush=True)
                 try:
                     refined, latency_ms = refine_via_api(
-                        client, port, system_prompt, sample.raw, model
+                        client, port, system_prompt, sample.raw
                     )
                 except Exception as e:
                     print(f"ERROR — {e}")

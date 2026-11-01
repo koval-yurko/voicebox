@@ -148,8 +148,6 @@ export type STTModelName =
   | 'qwen-asr-1.7B'
   | 'voxtral-realtime-4B';
 
-export type Qwen3ModelSize = '0.6B' | '1.7B' | '4B';
-
 export type CaptureSource = 'dictation' | 'recording' | 'file';
 
 /**
@@ -202,7 +200,6 @@ export interface CaptureCreateResponse extends CaptureResponse {
 
 export interface CaptureRefineRequest {
   flags?: RefinementFlags;
-  model_size?: Qwen3ModelSize;
 }
 
 export interface CaptureRetranscribeRequest {
@@ -214,7 +211,6 @@ export interface CaptureSettings {
   stt_model: STTModelName;
   language: string;
   auto_refine: boolean;
-  llm_model: Qwen3ModelSize;
   smart_cleanup: boolean;
   self_correction: boolean;
   preserve_technical: boolean;
@@ -228,10 +224,10 @@ export interface CaptureSettings {
   /** keytap key names. Toggle adds Space to the platform-specific PTT chord. */
   chord_toggle_to_talk_keys: string[];
   /**
-   * Optional OpenAI-compatible endpoint that overrides the built-in Qwen3
-   * LLM for refinement / personality rewriting. When set, backend calls hit
-   * `POST {custom_llm_endpoint}/chat/completions` with the model named by
-   * ``custom_llm_model``; leaving it null keeps the on-device Qwen path.
+   * OpenAI-compatible endpoint for refinement / personality rewriting.
+   * Backend calls hit `POST {custom_llm_endpoint}/chat/completions` with the
+   * model named by ``custom_llm_model``. There is no built-in LLM: while
+   * either is null, refine and personality are off.
    */
   custom_llm_endpoint: string | null;
   custom_llm_model: string | null;
@@ -303,6 +299,8 @@ export interface HealthResponse {
   backend_variant?: string; // "cpu", "cuda", or "rocm"
   supports_rocm?: boolean; // AMD GPU on Windows or Linux (/dev/kfd) — the ROCm backend is applicable
   cloud_enabled?: boolean; // VOICEBOX_CLOUD_ENABLED on the backend — show the Cloud section
+  tts_url?: string | null; // TTS worker URL when the server runs as main with workers
+  stt_url?: string | null; // STT worker URL when the server runs as main with workers
 }
 
 export interface CudaDownloadProgress {

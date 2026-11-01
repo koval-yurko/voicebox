@@ -43,6 +43,93 @@ def release_generation_memory(tts_model) -> None:
         logging.getLogger(__name__).debug("post-generation cache cleanup failed: %s", e)
 
 
+class RenderStopped(Exception):
+    """The client of /tts/render left; raised between chunks."""
+
+
+class _Stoppable:
+    """Backend proxy that refuses the next chunk once ``stopped()`` is true.
+
+    A running chunk is never interrupted: its thread would keep the GPU busy
+    after the caller released inference_lock.
+    """
+
+    def __init__(self, backend, stopped):
+        self._backend = backend
+        self._stopped = stopped
+
+    def __getattr__(self, name):
+        return getattr(self._backend, name)
+
+    async def generate(self, *args, **kwargs):
+        if self._stopped():
+            raise RenderStopped()
+        return await self._backend.generate(*args, **kwargs)
+
+
+async def synthesize(
+    *,
+    profile_id: str,
+    text: str,
+    language: str,
+    engine: str,
+    model_size: str,
+    seed: Optional[int],
+    instruct: Optional[str],
+    max_chunk_chars: Optional[int],
+    crossfade_ms: Optional[int],
+    db,
+    on_status=None,
+    stopped=None,
+):
+    """Load the engine, build the voice prompt and run chunked TTS in this process.
+
+    Returns ``(audio, sample_rate)``. ``on_status`` gets "loading_model" and
+    "generating"; ``stopped`` is polled before each chunk (see /tts/render).
+    """
+    from ..backends import engine_needs_trim, engine_retries_runaway, get_tts_backend_for_engine, load_engine_model
+    from ..utils.audio import has_tts_runaway, trim_tts_output
+    from ..utils.chunked_tts import generate_chunked
+
+    tts_model = get_tts_backend_for_engine(engine)
+    try:
+        if on_status and not tts_model.is_loaded():
+            await on_status("loading_model")
+        await load_engine_model(engine, model_size)
+        voice_prompt = await profiles.create_voice_prompt_for_profile(profile_id, db, use_cache=True, engine=engine)
+        if on_status:
+            await on_status("generating")
+
+        gen_kwargs: dict = dict(
+            language=language,
+            seed=seed,
+            instruct=instruct,
+            trim_fn=trim_tts_output if engine_needs_trim(engine) else None,
+            runaway_detector=has_tts_runaway if engine_retries_runaway(engine) else None,
+        )
+        if max_chunk_chars is not None:
+            gen_kwargs["max_chunk_chars"] = max_chunk_chars
+        if crossfade_ms is not None:
+            gen_kwargs["crossfade_ms"] = crossfade_ms
+        backend = _Stoppable(tts_model, stopped) if stopped else tts_model
+        return await generate_chunked(backend, text, voice_prompt, **gen_kwargs)
+    finally:
+        release_generation_memory(tts_model)
+
+
+async def render_speech(*, db, on_status=None, **params):
+    """``synthesize()`` here, or on the TTS worker when main runs with --tts-url."""
+    from .. import roles
+
+    if url := roles.tts_url():
+        from . import workers
+
+        if on_status:
+            await on_status("generating")
+        return await workers.render_tts(url, params)
+    return await synthesize(**params, db=db, on_status=on_status)
+
+
 async def run_generation(
     *,
     generation_id: str,
@@ -65,51 +152,27 @@ async def run_generation(
     This is the single entry point for all background generation work.
     It is designed to be enqueued via ``services.task_queue.enqueue_generation``.
     """
-    from ..backends import (
-        engine_needs_trim,
-        engine_retries_runaway,
-        get_tts_backend_for_engine,
-        load_engine_model,
-    )
-    from ..utils.chunked_tts import generate_chunked
-    from ..utils.audio import has_tts_runaway, normalize_audio, save_audio, trim_tts_output
+    from ..utils.audio import normalize_audio, save_audio
 
     task_manager = get_task_manager()
     bg_db = next(get_db())
-    tts_model = None
+
+    async def set_status(status: str) -> None:
+        await history.update_generation_status(generation_id, status, bg_db)
 
     try:
-        tts_model = get_tts_backend_for_engine(engine)
-
-        if not tts_model.is_loaded():
-            await history.update_generation_status(generation_id, "loading_model", bg_db)
-
-        await load_engine_model(engine, model_size)
-
-        voice_prompt = await profiles.create_voice_prompt_for_profile(
-            profile_id,
-            bg_db,
-            use_cache=True,
-            engine=engine,
-        )
-
-        await history.update_generation_status(generation_id, "generating", bg_db)
-        trim_fn = trim_tts_output if engine_needs_trim(engine) else None
-        runaway_detector = has_tts_runaway if engine_retries_runaway(engine) else None
-
-        gen_kwargs: dict = dict(
+        render = dict(
+            profile_id=profile_id,
+            text=text,
             language=language,
+            engine=engine,
+            model_size=model_size,
             seed=seed if mode != "regenerate" else None,
             instruct=instruct,
-            trim_fn=trim_fn,
-            runaway_detector=runaway_detector,
+            max_chunk_chars=max_chunk_chars,
+            crossfade_ms=crossfade_ms,
         )
-        if max_chunk_chars is not None:
-            gen_kwargs["max_chunk_chars"] = max_chunk_chars
-        if crossfade_ms is not None:
-            gen_kwargs["crossfade_ms"] = crossfade_ms
-
-        audio, sample_rate = await generate_chunked(tts_model, text, voice_prompt, **gen_kwargs)
+        audio, sample_rate = await render_speech(db=bg_db, on_status=set_status, **render)
 
         # --- Normalize (generate and regenerate always; retry skips) -----
         if normalize or mode == "regenerate":
@@ -174,7 +237,6 @@ async def run_generation(
     finally:
         task_manager.complete_generation(generation_id)
         bg_db.close()
-        release_generation_memory(tts_model)
 
 
 def _notify_speak_end(generation_id: str, *, status: str) -> None:
