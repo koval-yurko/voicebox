@@ -6,6 +6,7 @@ Usage: backend/venv/bin/python scripts/test_api_keys.py
 """
 
 import json
+import os
 import sys
 import tempfile
 import time
@@ -77,13 +78,25 @@ r = local.get("/mcp/", headers={**CF, "Authorization": f"Bearer {KEY}"})
 check("CF, /mcp with key -> passes auth", r.status_code not in (401, 403), r.status_code)
 
 # 3. Health checks and API docs are public; look-alike paths are not.
-for path in ("/health", "/health/filesystem", "/docs", "/redoc", "/openapi.json"):
+for path in ("/health", "/docs", "/redoc", "/openapi.json"):
     r = local.get(path, headers=CF)
     check(f"CF, {path} no key -> passes", r.status_code not in (401, 403), r.status_code)
-r = local.get("/healthz", headers=CF)
-check("CF, /healthz no key -> 401", r.status_code == 401, r.status_code)
+for path in ("/healthz", "/health/filesystem", "/docs/oauth2-redirect"):
+    r = local.get(path, headers=CF)
+    check(f"CF, {path} no key -> 401", r.status_code == 401, r.status_code)
 schemes = local.get("/openapi.json").json().get("components", {}).get("securitySchemes", {})
 check("OpenAPI declares the X-API-Key scheme", schemes.get("APIKey", {}).get("name") == "X-API-Key", schemes)
+check("role all: OpenAPI lists /tts/stream", "/tts/stream" in app.openapi()["paths"])
+
+# Main with workers: worker-only routes are hidden from main's OpenAPI.
+os.environ.update(VOICEBOX_ROLE="main", VOICEBOX_TTS_URL="http://127.0.0.1:17494", VOICEBOX_STT_URL="http://127.0.0.1:17495")
+app.openapi_schema = None
+paths = app.openapi()["paths"]
+check("main: OpenAPI hides /tts/stream and /stt/ws", "/tts/stream" not in paths and "/stt/ws" not in paths)
+check("main: OpenAPI keeps /profiles and /transcribe", "/profiles" in paths and "/transcribe" in paths)
+for k in ("VOICEBOX_ROLE", "VOICEBOX_TTS_URL", "VOICEBOX_STT_URL"):
+    os.environ.pop(k)
+app.openapi_schema = None
 
 # 4. Non-loopback client IP without Cloudflare headers (remote mode / LAN).
 r = remote_ip.get("/health")

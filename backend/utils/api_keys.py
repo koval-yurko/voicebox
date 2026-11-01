@@ -6,8 +6,8 @@ A tunnel connector runs on this machine, so tunnelled requests reach the
 server from 127.0.0.1 and only the Cloudflare headers tell them apart.
 
 External requests:
-- to the health checks (``/health``, ``/health/...``) and the API docs
-  (``/docs``, ``/redoc``, ``/openapi.json``) need no key;
+- to the health check (``/health``) and the API docs (``/docs``,
+  ``/redoc``, ``/openapi.json``) need no key;
 - to every other route must send a valid key as ``Authorization: Bearer <key>``
   or ``X-API-Key``; with no keys configured they are refused (fail closed).
 
@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 
 KEYS_FILENAME = "api_keys.json"
 # External requests to these paths need no key: health checks and the API docs.
-PUBLIC_PATHS = ("/health", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json")
-PUBLIC_PATH_PREFIXES = ("/health/",)
+# Exact paths only: /health/filesystem and other /health/* routes reveal local paths.
+PUBLIC_PATHS = ("/health", "/docs", "/redoc", "/openapi.json")
 CLOUDFLARE_HEADERS = (b"cf-connecting-ip", b"cf-ray")
 
 
@@ -126,7 +126,7 @@ class APIKeyMiddleware:
             return
 
         path = scope.get("path", "")
-        if scope["type"] == "http" and (path in PUBLIC_PATHS or path.startswith(PUBLIC_PATH_PREFIXES)):
+        if scope["type"] == "http" and path in PUBLIC_PATHS:
             await self.app(scope, receive, send)
             return
 
@@ -150,7 +150,12 @@ class APIKeyMiddleware:
 
 
 def add_openapi_security(app) -> None:
-    """Declare the API key in the OpenAPI schema so Swagger UI shows an Authorize button."""
+    """Declare the API key in the OpenAPI schema so Swagger UI shows an Authorize button.
+
+    Routes that run on a TTS/STT worker are left out: callers must use the worker's own URL.
+    """
+    from ..roles import worker_for_path
+
     base_openapi = app.openapi
 
     def openapi():
@@ -160,6 +165,8 @@ def add_openapi_security(app) -> None:
                 "APIKey": {"type": "apiKey", "in": "header", "name": "X-API-Key"}
             }
             schema["security"] = [{"APIKey": []}]
+            for path in [p for p in schema.get("paths", {}) if worker_for_path(p)]:
+                del schema["paths"][path]
         return app.openapi_schema
 
     app.openapi = openapi

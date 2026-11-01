@@ -9,7 +9,7 @@ Usage:
   python3 scripts/voicebox_api_key.py list
   python3 scripts/voicebox_api_key.py revoke <name>
 Options:
-  --data-dir PATH   default: ~/Library/Application Support/sh.voicebox.app
+  --data-dir PATH   default: ~/Library/Application Support/com.koval-yurko.voicebox-yk
 """
 
 import argparse
@@ -18,7 +18,7 @@ import os
 import secrets
 from pathlib import Path
 
-DEFAULT_DATA_DIR = Path.home() / "Library" / "Application Support" / "sh.voicebox.app"
+DEFAULT_DATA_DIR = Path.home() / "Library" / "Application Support" / "com.koval-yurko.voicebox-yk"
 
 
 def load(path: Path) -> dict:
