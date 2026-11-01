@@ -208,6 +208,21 @@ Today Tauri starts 1 server on 17593 (`tauri/src-tauri/src/main.rs:124`, spawn a
 
    Why these values: for TTS, 2048 MB is the smallest limit with no slowdown and halves the peak (24 GB to 11 GB). Smaller limits are slower (512 MB +18 %, 0 almost 3x). For STT the limit changes little; 512 MB cuts about 0.3 GB of peak at the same speed. With both workers and main, the voice stack now peaks at about 15 GB instead of about 28 GB, which leaves room for an external LLM on a 48 GB Mac. The steady footprint after a render stays at about model + cache limit, so the cache is not fully returned after a generation.
 7. **Verify.** Run `scripts/stt_tts_contention_test.py` and `integrations/livekit/scripts/e2e_session.py --stt-port 17495 --tts-port 17494`. Run a UI generation and a dictation through main.
+   Done 2026-11-01 on commit `0a07bcd`. Setup as Tauri starts it: main `--role main --tts-url http://127.0.0.1:17494 --stt-url http://127.0.0.1:17495` on 17690, TTS worker on 17494, STT worker on 17495, 1 copy of the app data directory, all 3 with `--parent-pid` of 1 parent process. The workers logged their cache limits (2048 MB and 512 MB). The installed app on 17593 was not touched.
+
+   Contention test (`--wav /tmp/vb-mp/speech24k.wav --profile <Men 1>`, STT `qwen-asr-0.6B`, 1 warm-up and 6 rounds), next to the 2026-10-31 2-process numbers:
+
+   | TTS load | Final delay median | Final delay max | Interims (of 13) | Max interim gap | TTS real-time factor | 2026-10-31 median / max |
+   |---|---|---|---|---|---|---|
+   | none | 119 ms | 123 ms | 13 | 521 ms | - | 131 / 142 ms |
+   | `/tts/ws` | 291 ms | 623 ms | 12-13 | 838 ms | 0.85x | 242 / 546 ms |
+   | `/tts/stream` | 212 ms | 562 ms | 12-13 | 843 ms | 1.07x | 236 / 259 ms |
+
+   The split keeps the result of the research: under TTS load the final arrives in about 0.2-0.3 s (1 process: 8 s or a timeout). The cache limit does not slow TTS (0.85x and 1.07x, as before).
+
+   LiveKit `AgentSession` (`uv run --extra example python scripts/e2e_session.py --stt-port 17495 --tts-port 17494 --profile-id <Men 1> ../../backend/tests/fixtures/speech_pause_speech_16k.wav`): both FINAL transcripts are correct, the agent speech was interrupted 2 times, and the agent stopped 1302 ms after the barge-in audio started. Result: transcription PASS, barge-in PASS. The script needs the `example` extra (Silero VAD).
+
+   Through main, with the same calls the UI sends: `POST /generate` (Men 1, 1.7B) completed and main saved a 4.4 s WAV; `POST /captures` with a 6.7 s WAV returned the correct transcript (the saved STT model `whisper-turbo`, on the STT worker). Footprint after: main 388 MB, TTS worker 5.6 GB, STT worker 3.3 GB. `/models/status` on main shows `qwen-tts-1.7B` and `whisper-turbo` loaded (in the workers). Killing the parent process stopped all 3 servers.
 8. Optional: hold `inference_lock` per TTS chunk for `--role all`.
 
 ## Rebase on upstream
@@ -220,12 +235,10 @@ The fork is rebased on upstream `main`. To keep conflicts low:
 
 ## Not checked
 
-- Full LiveKit session (`e2e_session.py`) with 2 ports. Only the direct WebSocket test ran.
-- Other STT models (Voxtral Realtime, Whisper) and TTS model sizes.
+- Other streaming STT models (Voxtral Realtime, Whisper over `/stt/ws`). Batch `whisper-turbo` ran in step 7.
 - 3 processes with an external LLM that generates during TTS.
 - The Tauri process manager in a built app (start, restart, models dir change, keep-running exit).
-- If model downloads in main load the model into memory (they must not).
-- If the voice prompt cache write is safe when main and the TTS worker both write it.
+- A download through main of a model that is not on disk (it goes to the worker's `/models/load`, steps 3 and 4).
 - Settings sync was checked by code reading only.
 
 ## Hardware (dev Mac)
