@@ -11,7 +11,7 @@ const DOCS = path.resolve(import.meta.dirname, '..');
 const SRC = path.join(DOCS, 'content/docs');
 const OUT = path.resolve(process.argv[2] ?? path.join(DOCS, 'wiki-out'));
 const API_DOCS_URL = 'https://voice.kovalchuk.win/docs';
-const LOCAL_API_DOCS_URL = 'http://127.0.0.1:17493/docs';
+const LOCAL_API_DOCS_URL = 'http://127.0.0.1:17593/docs';
 const CALLOUT = { info: 'NOTE', warn: 'WARNING', warning: 'WARNING', success: 'TIP', error: 'CAUTION' };
 const COMPONENTS = /<\/?(Steps|Step|Cards|Card|Callout|AccordionGroup|Accordion|Tabs|Tab|Files|Folder|File|APIPage)\b/;
 
