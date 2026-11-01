@@ -6,9 +6,10 @@ A tunnel connector runs on this machine, so tunnelled requests reach the
 server from 127.0.0.1 and only the Cloudflare headers tell them apart.
 
 External requests:
-- may only reach the real-time TTS routes (``/tts/...``); anything else is 403;
-- must send a valid key as ``Authorization: Bearer <key>`` or ``X-API-Key``;
-  with no keys configured every external request is refused (fail closed).
+- to the health checks (``/health``, ``/health/...``) and the API docs
+  (``/docs``, ``/redoc``, ``/openapi.json``) need no key;
+- to every other route must send a valid key as ``Authorization: Bearer <key>``
+  or ``X-API-Key``; with no keys configured they are refused (fail closed).
 
 Local requests (the desktop app, local scripts) are not affected.
 
@@ -35,7 +36,9 @@ from .. import config
 logger = logging.getLogger(__name__)
 
 KEYS_FILENAME = "api_keys.json"
-EXTERNAL_PATH_PREFIXES = ("/tts/",)
+# External requests to these paths need no key: health checks and the API docs.
+PUBLIC_PATHS = ("/health", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json")
+PUBLIC_PATH_PREFIXES = ("/health/",)
 CLOUDFLARE_HEADERS = (b"cf-connecting-ip", b"cf-ray")
 
 
@@ -123,8 +126,8 @@ class APIKeyMiddleware:
             return
 
         path = scope.get("path", "")
-        if not path.startswith(EXTERNAL_PATH_PREFIXES):
-            await self._deny(scope, receive, send, 403, "Not available externally")
+        if scope["type"] == "http" and (path in PUBLIC_PATHS or path.startswith(PUBLIC_PATH_PREFIXES)):
+            await self.app(scope, receive, send)
             return
 
         name = self.store.match(request_key(scope))
@@ -144,3 +147,19 @@ class APIKeyMiddleware:
         else:
             headers = {"WWW-Authenticate": "Bearer"} if status == 401 else None
             await JSONResponse({"detail": detail}, status_code=status, headers=headers)(scope, receive, send)
+
+
+def add_openapi_security(app) -> None:
+    """Declare the API key in the OpenAPI schema so Swagger UI shows an Authorize button."""
+    base_openapi = app.openapi
+
+    def openapi():
+        if not app.openapi_schema:
+            schema = base_openapi()  # also caches the schema on app.openapi_schema
+            schema.setdefault("components", {})["securitySchemes"] = {
+                "APIKey": {"type": "apiKey", "in": "header", "name": "X-API-Key"}
+            }
+            schema["security"] = [{"APIKey": []}]
+        return app.openapi_schema
+
+    app.openapi = openapi

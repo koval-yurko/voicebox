@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manage API keys for external access to the real-time TTS routes.
+"""Manage API keys for external access to the Voicebox API.
 
 Keys are stored in <data dir>/api_keys.json (mode 0600). The server re-reads
 the file when it changes, so no restart is needed.
