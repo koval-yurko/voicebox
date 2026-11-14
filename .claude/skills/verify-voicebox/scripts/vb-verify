@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# Disposable Voicebox YK backend for verification runs.
+# Usage: vb-verify up [--split] | doctor | curl <name> [tts:|stt:]<path> [curl args...] | wav <name> <text> | client <stt-ws|tts-ws|mcp> <name> <args...> | down
+# Never touches the installed apps: Voicebox YK (17593/17494/17495) and Voicebox (17493).
+set -euo pipefail
+
+REPO="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+ROOT="$REPO/.verify"
+CURRENT="$ROOT/current"
+MAIN_PORT="${VB_VERIFY_PORT:-17693}"
+TTS_PORT=$((MAIN_PORT + 1))
+STT_PORT=$((MAIN_PORT + 2))
+PROTECTED_PORTS="17493 17494 17495 17593"
+
+die() { echo "vb-verify: $*" >&2; exit 1; }
+
+pick_python() {
+  if [ -n "${VB_PYTHON:-}" ]; then echo "$VB_PYTHON"; return; fi
+  [ -x "$REPO/backend/venv/bin/python" ] && { echo "$REPO/backend/venv/bin/python"; return; }
+  # A worktree has no venv; reuse the main checkout's venv (dependencies only, code comes from $REPO).
+  local main; main="$(git -C "$REPO" worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
+  [ -x "$main/backend/venv/bin/python" ] && { echo "$main/backend/venv/bin/python"; return; }
+  die "no Python venv. Run 'just setup-python' in the main checkout or set VB_PYTHON."
+}
+
+run_dir() { [ -f "$CURRENT" ] || die "no active run. Start one with: vb-verify up"; cat "$CURRENT"; }
+role_port() { # <role>: port of that role in this run; main/all when the run has no such worker
+  local run; run="$(run_dir)"
+  awk -v r="$1" '$3==r{print $2; f=1} END{if(!f) exit 1}' "$run/pids" \
+    || awk '$3=="all"||$3=="main"{print $2}' "$run/pids"
+}
+listener_pid() { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1; }
+
+start_proc() { # <name> <port> <args...>
+  local name=$1 port=$2; shift 2
+  [ -z "$(listener_pid "$port")" ] || die "port $port is busy. Set VB_VERIFY_PORT to another base port."
+  (cd "$REPO" && exec "$PY" -m backend.server --host 127.0.0.1 --port "$port" "$@") \
+    >"$EVIDENCE/logs/$name.log" 2>&1 &
+  echo "$! $port $name" >>"$RUN/pids"
+}
+
+wait_ready() { # <port> <role>: ready = /health reports the role and the DB answers
+  local port=$1 role=$2 i
+  for i in $(seq 1 180); do
+    if curl -sf "http://127.0.0.1:$port/health" 2>/dev/null | grep -q "\"role\":\"$role\""; then
+      [ "$role" = tts ] || [ "$role" = stt ] && return 0
+      curl -sf "http://127.0.0.1:$port/profiles" >/dev/null 2>&1 && return 0
+    fi
+    sleep 1
+  done
+  die "port $port ($role) not ready after 180 s. See $EVIDENCE/logs/"
+}
+
+cmd_up() {
+  [ ! -f "$CURRENT" ] || die "run $(basename "$(cat "$CURRENT")") is active. Run 'vb-verify down' first."
+  for p in $MAIN_PORT $TTS_PORT $STT_PORT; do
+    case " $PROTECTED_PORTS " in *" $p "*) die "port $p belongs to an installed app";; esac
+  done
+  PY="$(pick_python)"
+  local id; id="${VB_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
+  RUN="$ROOT/runs/$id"; EVIDENCE="$ROOT/evidence/$id"
+  mkdir -p "$RUN/data" "$EVIDENCE/logs"
+  : >"$RUN/pids"
+  echo "$RUN" >"$CURRENT"
+  if [ "${1:-}" = "--split" ]; then
+    start_proc tts "$TTS_PORT" --role tts --data-dir "$RUN/data"
+    start_proc stt "$STT_PORT" --role stt --data-dir "$RUN/data"
+    wait_ready "$TTS_PORT" tts; wait_ready "$STT_PORT" stt
+    start_proc main "$MAIN_PORT" --role main --data-dir "$RUN/data" \
+      --tts-url "http://127.0.0.1:$TTS_PORT" --stt-url "http://127.0.0.1:$STT_PORT"
+    wait_ready "$MAIN_PORT" main
+  else
+    start_proc all "$MAIN_PORT" --role all --data-dir "$RUN/data"
+    wait_ready "$MAIN_PORT" all
+  fi
+  echo "ready: http://127.0.0.1:$MAIN_PORT  run=$id"
+  echo "evidence: $EVIDENCE"
+}
+
+cmd_doctor() { # read-only
+  local run ok=0 pid port name; run="$(run_dir)"
+  local id; id="$(basename "$run")"
+  echo "run: $id  data: $run/data  evidence: $ROOT/evidence/$id"
+  while read -r pid port name; do
+    if ! kill -0 "$pid" 2>/dev/null; then echo "FAIL $name: pid $pid is not running"; ok=1; continue; fi
+    local owner; owner="$(listener_pid "$port")"
+    # The listener may be our pid or a child it forked.
+    if [ "$owner" != "$pid" ] && [ "$(ps -o ppid= -p "${owner:-0}" 2>/dev/null | tr -d ' ')" != "$pid" ]; then
+      echo "FAIL $name: port $port is owned by pid ${owner:-none}, not $pid"; ok=1; continue
+    fi
+    local health; health="$(curl -sf "http://127.0.0.1:$port/health" || true)"
+    [ -n "$health" ] || { echo "FAIL $name: /health does not answer on $port"; ok=1; continue; }
+    echo "$health" | grep -q "\"role\":\"$name\"" || { echo "FAIL $name: wrong role: $health"; ok=1; continue; }
+    echo "ok   $name pid=$pid port=$port"
+  done <"$run/pids"
+  local main_port; main_port="$(awk '$3=="all"||$3=="main"{print $2}' "$run/pids")"
+  local want got; want="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$REPO/backend/__init__.py")"
+  got="$(curl -sf "http://127.0.0.1:$main_port/" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"
+  [ "$want" = "$got" ] && echo "ok   version $got" || { echo "FAIL version: repo $want, server ${got:-none}"; ok=1; }
+  curl -sf "http://127.0.0.1:$main_port/health/filesystem" | grep -q "$run/data" \
+    && echo "ok   data dir is the disposable one" || { echo "FAIL data dir is not $run/data"; ok=1; }
+  return $ok
+}
+
+cmd_curl() { # <name> [tts:|stt:]<path> [curl args...]: saves command, body, HTTP code to evidence
+  local run name=$1 path=$2 role=main; shift 2; run="$(run_dir)"
+  case "$path" in tts:*|stt:*) role="${path%%:*}"; path="${path#*:}";; esac
+  local ev; ev="$ROOT/evidence/$(basename "$run")"
+  local port; port="$(role_port "$role")"
+  local url="http://127.0.0.1:$port$path"
+  printf 'curl -sS %q' "$url" >"$ev/$name.cmd"; printf ' %q' "$@" >>"$ev/$name.cmd"; echo >>"$ev/$name.cmd"
+  local code; code="$(curl -sS -o "$ev/$name.out" -w '%{http_code}' "$url" "$@")" || true
+  echo "$code" >"$ev/$name.code"
+  cat "$ev/$name.out"; echo; echo "HTTP $code -> $ev/$name.out" >&2
+}
+
+cmd_wav() { # <name> <text>: 16 kHz mono WAV of spoken text (macOS say), saved as evidence
+  local run name=$1 text=$2; run="$(run_dir)"
+  local out="$ROOT/evidence/$(basename "$run")/$name.wav"
+  say -o "$out" --data-format=LEI16@16000 "$text"
+  echo "$out"
+}
+
+cmd_client() { # <stt-ws|tts-ws|mcp> <name> <args...>: vb-client.py against the right port
+  local run sub=$1 name=$2 role=main; shift 2; run="$(run_dir)"
+  case "$sub" in stt-ws) role=stt;; tts-ws) role=tts;; mcp) ;; *) die "unknown client: $sub";; esac
+  local out; out="$ROOT/evidence/$(basename "$run")/$name"
+  "$(pick_python)" "$(dirname "$0")/vb-client.py" "$sub" "$out" "http://127.0.0.1:$(role_port "$role")" "$@"
+}
+
+cmd_down() {
+  [ -f "$CURRENT" ] || { echo "no active run"; return 0; }
+  local run pid port name; run="$(cat "$CURRENT")"
+  while read -r pid port name; do
+    kill -TERM "$pid" 2>/dev/null || true
+  done <"$run/pids"
+  for _ in $(seq 1 20); do
+    local alive=0
+    while read -r pid port name; do kill -0 "$pid" 2>/dev/null && alive=1; done <"$run/pids"
+    [ $alive = 0 ] && break; sleep 0.5
+  done
+  while read -r pid port name; do kill -KILL "$pid" 2>/dev/null || true; done <"$run/pids"
+  rm -rf "$run" "$CURRENT"
+  echo "stopped. evidence kept: $ROOT/evidence/$(basename "$run")"
+}
+
+case "${1:-}" in
+  up) shift; cmd_up "$@" ;;
+  doctor) cmd_doctor ;;
+  curl) shift; [ $# -ge 2 ] || die "usage: vb-verify curl <name> <path> [curl args...]"; cmd_curl "$@" ;;
+  wav) shift; [ $# -eq 2 ] || die "usage: vb-verify wav <name> <text>"; cmd_wav "$@" ;;
+  client) shift; [ $# -ge 3 ] || die "usage: vb-verify client <stt-ws|tts-ws|mcp> <name> <args...>"; cmd_client "$@" ;;
+  down) cmd_down ;;
+  *) sed -n 3p "$0" | sed 's/^# //'; exit 2 ;;
+esac
